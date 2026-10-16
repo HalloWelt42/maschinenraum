@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from maschinenraum.konfig import Leitstelle, Ordner
-from maschinenraum.messen import Messer, speicher, swap_mac
+from maschinenraum.messen import Messer, leistung_w, speicher, swap_mac
 from maschinenraum.protokoll import Befehl, Befehlsart, Faehigkeit, Prozesszustand
 from maschinenraum.prozesse import Soll, Verwalter
 
@@ -111,3 +111,10 @@ def test_swap_auch_mit_dezimalkomma():
     assert swap_mac("total = 18432.00M  used = 17117.56M  free = 1314.44M  (encrypted)") == (17117.56 / 1024, 18.0)
     assert swap_mac("total = 18432,00M  used = 17117,56M  free = 1314,44M  (encrypted)") == (17117.56 / 1024, 18.0)
     assert swap_mac("unbekannt") == (None, None)
+
+
+def test_leistung_wie_macmon_total():
+    """macmon zeigt bei "Total" sys_power (ganzer Rechner); all_power ist nur Prozessor, Grafik, Neural Engine."""
+    assert leistung_w({"all_power": 2.2258, "sys_power": 15.8748}) == 15.9
+    assert leistung_w({"all_power": 2.2258, "sys_power": 0.0}) == 2.2
+    assert leistung_w({}) is None

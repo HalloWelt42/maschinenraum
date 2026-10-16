@@ -46,7 +46,7 @@
       </div>
       <div class="werte">
         {#if mw.temperatur_c != null}<span title="Temperatur des Prozessors"><i class="fa-solid fa-temperature-half"></i><b class="zahl">{komma(mw.temperatur_c, 0)} °C</b></span>{/if}
-        {#if mw.leistung_w != null}<span title="Leistungsaufnahme des ganzen Rechners"><i class="fa-solid fa-bolt"></i><b class="zahl">{komma(mw.leistung_w, 0)}</b> Watt</span>{/if}
+        {#if mw.leistung_w != null}<span title="Leistungsaufnahme des ganzen Rechners"><i class="fa-solid fa-bolt"></i><b class="zahl">{komma(mw.leistung_w, 1)}</b> Watt</span>{/if}
         {#if mw.last_1m != null}<span title="Durchschnittliche Last der letzten Minute"><i class="fa-solid fa-gauge"></i><b class="zahl">{komma(mw.last_1m, 1)}</b> Last</span>{/if}
         {#if mw.platte_frei_gb != null}<span title="Freier Platz auf der Platte"><i class="fa-solid fa-hard-drive"></i><b class="zahl">{gb(mw.platte_frei_gb)}</b> frei</span>{/if}
       </div>

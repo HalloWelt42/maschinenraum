@@ -97,6 +97,13 @@ class CpuLinux:
         return round(100 * (1 - (leer - vorher[0]) / (summe - vorher[1])), 1)
 
 
+def leistung_w(d: dict) -> float | None:
+    """Leistung des ganzen Rechners wie "Total" in macmon: sys_power (alles, was das Gerät zieht). all_power ist nur
+    Prozessor, Grafik und Neural Engine und gilt nur, wenn sys_power fehlt (dann zeigt macmon "Power")."""
+    wert = d.get("sys_power") or d.get("all_power") or 0
+    return round(wert, 1) or None
+
+
 class Macmon:
     """Liest fortlaufend die Zeilen von `macmon pipe` und hält die letzte; ohne macmon bleibt alles leer."""
 
@@ -144,7 +151,7 @@ class Macmon:
         return {"cpu_prozent": round(cpu * 100, 1), "grafik_prozent": round(d.get("gpu_usage", [0, 0])[1] * 100, 1),
                 # im Leerlauf meldet der Sensor gelegentlich Unsinn (einstellige Grade); dann lieber nichts zeigen
                 "temperatur_c": round(temperatur, 1) if TEMPERATUR_PLAUSIBEL[0] <= temperatur <= TEMPERATUR_PLAUSIBEL[1] else None,
-                "leistung_w": round(d.get("all_power", 0), 1) or None}
+                "leistung_w": leistung_w(d)}
 
 
 class Messer:
