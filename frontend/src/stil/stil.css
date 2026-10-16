@@ -309,7 +309,7 @@ code, .code { font-family: var(--mr-schrift-code); font-size: 0.92em; background
   grid-area: kopf; display: flex; align-items: center; gap: var(--mr-a4);
   padding: 0 var(--mr-a4); background: var(--mr-leiste); border-bottom: 1px solid var(--mr-rand);
 }
-.marke { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 21px; letter-spacing: 0.02em; width: calc(var(--mr-seite-breite) - var(--mr-a4)); }
+.marke { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 21px; letter-spacing: 0.02em; min-width: calc(var(--mr-seite-breite) - var(--mr-a4)); flex-shrink: 0; }
 .marke-bild { width: 36px; height: 36px; display: block; }   /* freigestelltes Symbol, kein Kasten */
 .marke .zahl { font-size: var(--mr-gr-marke); font-weight: 600; color: var(--mr-text-3); margin-left: 2px; align-self: flex-end; padding-bottom: 3px; }
 /* Rolle im Verbund neben der Marke, damit man auf einen Blick sieht, wofür dieses Programm da ist */
@@ -812,7 +812,7 @@ select.eingabe { padding-right: var(--mr-a5); }
 }
 @media (max-width: 1240px) {
   :root { --mr-seite-breite: 72px; }
-  .marke { width: auto; gap: 0; }
+  .marke { min-width: 0; gap: 0; }
   .marke .marke-name, .marke .zahl { display: none; }
   .rolle { display: none; }
   .seite { padding: var(--mr-a3) var(--mr-a2); align-items: stretch; }
