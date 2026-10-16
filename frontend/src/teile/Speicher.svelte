@@ -9,8 +9,8 @@
   let { stand }: { stand: Stand } = $props();
 
   const mw = $derived(stand.messwerte);
-  const laufend = $derived(stand.dienste.filter((d) => d.gemessen && d.gb > 0));
-  const dienste_gb = $derived(laufend.reduce((s, d) => s + d.gb, 0));
+  const laufend = $derived(stand.dienste.filter((d) => (d.gb_jetzt ?? 0) > 0));
+  const dienste_gb = $derived(laufend.reduce((s, d) => s + (d.gb_jetzt ?? 0), 0));
   const laeufer_gb = $derived(stand.nachbar.erreichbar ? stand.nachbar.geladen_gb : 0);
   const uebrig_gb = $derived(mw ? Math.max(0, mw.speicher_belegt_gb - dienste_gb - laeufer_gb) : 0);
   const frei_gb = $derived(mw ? Math.max(0, mw.speicher_gesamt_gb - mw.speicher_belegt_gb) : 0);
@@ -23,12 +23,12 @@
     {#if mw}<span class="rechts"><b class="zahl">{gb(mw.speicher_belegt_gb)}</b> von <span class="zahl">{gb(mw.speicher_gesamt_gb)}</span> belegt</span>{/if}</h3>
   {#if mw}
     <div class="speicher gross" title="Belegter Speicher nach Herkunft">
-      {#each laufend as d (d.kennung)}<span style="width:{anteil(d.gb)};background:{dienstfarbe(d.faehigkeiten)}" title="{d.name}: {gb(d.gb)}"></span>{/each}
+      {#each laufend as d (d.kennung)}<span style="width:{anteil(d.gb_jetzt ?? 0)};background:{dienstfarbe(d.faehigkeiten)}" title="{d.name}: {gb(d.gb_jetzt)}"></span>{/each}
       {#if laeufer_gb}<span class="laeufer" style="width:{anteil(laeufer_gb)}" title="Modell-Läufer: {gb(laeufer_gb)}"></span>{/if}
       <span class="system" style="width:{anteil(uebrig_gb)}" title="System und andere Programme: {gb(uebrig_gb)}"></span>
     </div>
     <ul class="legende">
-      {#each laufend as d (d.kennung)}<li><i class="fa-solid fa-square" style="color:{dienstfarbe(d.faehigkeiten)}"></i>{d.name}<b class="zahl">{gb(d.gb)}</b></li>{/each}
+      {#each laufend as d (d.kennung)}<li><i class="fa-solid fa-square" style="color:{dienstfarbe(d.faehigkeiten)}"></i>{d.name}<b class="zahl">{gb(d.gb_jetzt)}</b></li>{/each}
       {#if stand.nachbar.erreichbar}<li title="Geladene Modelle des Modell-Läufers; die verwaltet er selbst"><i class="fa-solid fa-square laeufer-farbe"></i>Modell-Läufer<b class="zahl">{gb(laeufer_gb)}</b></li>{/if}
       <li title="Betriebssystem und alle Programme, die der Maschinenraum nicht verwaltet"><i class="fa-solid fa-square system-farbe"></i>System und Programme<b class="zahl">{gb(uebrig_gb)}</b></li>
       <li><i class="fa-regular fa-square"></i>Frei<b class="zahl">{gb(frei_gb)}</b></li>

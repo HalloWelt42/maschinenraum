@@ -17,7 +17,7 @@
   const s = $derived(lage.stand);
   const laufen = $derived(s ? s.dienste.filter((d) => d.zustand === 'laeuft' || d.zustand === 'startet').length : 0);
   const gestoert = $derived(s ? s.dienste.filter((d) => d.zustand === 'gestoert').length : 0);
-  const dienste_gb = $derived(s ? s.dienste.filter((d) => d.gemessen).reduce((x, d) => x + d.gb, 0) : 0);
+  const dienste_gb = $derived(s ? s.dienste.reduce((x, d) => x + (d.gb_jetzt ?? 0), 0) : 0);
 
   $effect(() => {
     document.title = s ? `Maschinenraum ${s.rechner}` : 'Maschinenraum';

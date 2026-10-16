@@ -118,6 +118,8 @@ class DienstVorlage(BaseModel):
     umgebung_datei: Path | None = Field(default=None, description="Datei mit Zeilen NAME=WERT, zum Beispiel die .env des Projekts")
     pfad: str = STANDARD_PFAD
     neustart: bool = Field(default=True, description="nach einem Absturz neu starten, solange er laufen soll")
+    leitstelle_anhalten: bool = Field(default=True, description="die Leitstelle darf ihn anhalten, um Speicher freizumachen; nein: nur von Hand")
+    aktiv_ab_prozent: float = Field(default=5.0, ge=0, description="ab dieser Prozessorlast (Prozent eines Kerns) gilt er als arbeitend")
 
     @field_validator("ordner", "umgebung_datei", mode="before")
     @classmethod

@@ -16,8 +16,9 @@ struct Dienst: Decodable, Identifiable {
     let kennung: String
     let name: String
     let zustand: String
-    let gb: Double
-    let gemessen: Bool
+    let gb_jetzt: Double?
+    let bedarf_gb: Double
+    let aktiv: Bool
     var id: String { kennung }
     var laeuft: Bool { zustand == "laeuft" || zustand == "startet" || zustand == "stoppt" }
 }
@@ -104,7 +105,8 @@ struct Ansicht: View {
                         Circle().fill(d.zustand == "gestoert" ? Color.red : d.laeuft ? Color.green : Color.gray.opacity(0.5)).frame(width: 9, height: 9)
                         Text(d.name).lineLimit(1)
                         Spacer()
-                        if d.gemessen { Text(gb(d.gb)).monospacedDigit().foregroundStyle(.secondary) }
+                        if d.aktiv { Image(systemName: "gearshape.fill").foregroundStyle(.orange).help("arbeitet gerade") }
+                        if let jetzt = d.gb_jetzt { Text(gb(jetzt)).monospacedDigit().foregroundStyle(.secondary).help("Bedarf \(gb(d.bedarf_gb))") }
                         if modell.arbeitet.contains(d.kennung) {
                             ProgressView().controlSize(.small)
                         } else {

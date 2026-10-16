@@ -68,8 +68,10 @@ class ProzessBericht(BaseModel):
     port: int | None = None
     zustand: Prozesszustand
     fremd: bool = False                 # läuft, aber nicht vom Agenten gestartet
-    gb: float                           # gemessen, solange er läuft; sonst letzter Höchstwert oder Schätzung
-    gemessen: bool = False
+    gb_jetzt: float | None = None       # gemessen, solange er läuft; sonst None
+    bedarf_gb: float                    # was er laufend braucht: höchster gemessener Wert, mindestens die Schätzung
+    aktiv: bool = False                 # arbeitet gerade (Prozessorlast über der Schwelle des Dienstes)
+    anhalten_erlaubt: bool = True       # darf die Leitstelle ihn anhalten, um Speicher freizumachen
     meldung: str = ""
 
 

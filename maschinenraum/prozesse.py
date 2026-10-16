@@ -101,6 +101,8 @@ class Prozessdienst:
         self.sperre = asyncio.Lock()
         self.abstuerze: deque[float] = deque()
         self.neustart_um: float | None = None
+        self.cpu_prozent: float | None = None             # Prozessorlast seit der letzten Prüfung, Prozent eines Kerns
+        self._rechenzeit: tuple[float, float] | None = None  # (Uhrzeit, Summe Rechenzeit) der letzten Prüfung
 
     @property
     def kennung(self) -> str:
@@ -141,10 +143,11 @@ class Prozessdienst:
             self.fremd_pid = None
             if self.zustand == Prozesszustand.AUS or self.zustand == Prozesszustand.GESTOERT:
                 self.zustand = Prozesszustand.LAEUFT
-            self.gb = sum(prozess_bytes(p) for p in tabelle.in_gruppe(g)) / GIB
+            self._messen(tabelle.in_gruppe(g), tabelle)
             return None
         if g is not None:                                   # eigene Gruppe ist weg
-            self.stand.gruppe, self.gb = None, None
+            self.stand.gruppe = None
+            self._messen([], tabelle)
             if self.zustand in (Prozesszustand.LAEUFT, Prozesszustand.STARTET):
                 self.zustand = Prozesszustand.GESTOERT
                 self.meldung = f"unerwartet beendet{f' (Code {code})' if code is not None else ''}{self._letzte_zeile()}"
@@ -156,15 +159,36 @@ class Prozessdienst:
         if self.vorlage.port and self.erreichbar():
             self.fremd_pid = lauschender_prozess(self.vorlage.port)
             self.zustand = Prozesszustand.LAEUFT
-            pids = tabelle.mit_nachfahren(self.fremd_pid) if self.fremd_pid else []
-            self.gb = sum(prozess_bytes(p) for p in pids) / GIB if pids else None
+            self._messen(tabelle.mit_nachfahren(self.fremd_pid) if self.fremd_pid else [], tabelle)
             self.meldung = "von außen gestartet" if self.fremd_pid else "von außen gestartet, Prozess nicht lesbar"
         else:
-            self.fremd_pid, self.gb = None, None
+            self.fremd_pid = None
+            self._messen([], tabelle)
             if self.zustand == Prozesszustand.LAEUFT:
                 self.meldung = "von außen beendet"
             self.zustand = Prozesszustand.AUS
         return None
+
+    def _messen(self, pids: list[int], tabelle: Prozesstabelle) -> None:
+        """Speicher und Prozessorlast der Prozesse des Dienstes; ohne Prozesse ist beides leer."""
+        if not pids:
+            self.gb, self.cpu_prozent, self._rechenzeit = None, None, None
+            return
+        self.gb = sum(prozess_bytes(p) for p in pids) / GIB
+        jetzt, summe = time.monotonic(), sum(tabelle.rechenzeit_s.get(p, 0.0) for p in pids)
+        if self._rechenzeit and jetzt > self._rechenzeit[0]:
+            self.cpu_prozent = round(max(0.0, summe - self._rechenzeit[1]) / (jetzt - self._rechenzeit[0]) * 100, 1)
+        self._rechenzeit = (jetzt, summe)
+
+    @property
+    def aktiv(self) -> bool:
+        return self.cpu_prozent is not None and self.cpu_prozent >= self.vorlage.aktiv_ab_prozent
+
+    @property
+    def bedarf_gb(self) -> float:
+        """Was der Dienst laufend braucht: der höchste je gemessene Wert, mindestens die Schätzung der Dienstdatei.
+        Dienste laden ihre Modelle oft erst bei Bedarf; der Wert gleich nach dem Start täuscht."""
+        return round(max(self.stand.spitze_gb or 0.0, self.vorlage.speicher_gb, self.gb or 0.0), 2)
 
     def _protokolldatei(self) -> Path:
         return self.protokolle / f"{self.kennung}.log"
@@ -309,10 +333,10 @@ class Prozessdienst:
     # ── Bericht ──────────────────────────────────────────────────────────
     def bericht(self) -> ProzessBericht:
         laeuft = self.zustand in (Prozesszustand.LAEUFT, Prozesszustand.STARTET, Prozesszustand.STOPPT)
-        gemessen = laeuft and self.gb is not None
-        gb = self.gb if gemessen else (self.stand.spitze_gb or self.vorlage.speicher_gb)
         return ProzessBericht(kennung=self.kennung, name=self.vorlage.name, faehigkeiten=set(self.vorlage.faehigkeiten), port=self.vorlage.port,
-                              zustand=self.zustand, fremd=self.fremd_pid is not None, gb=round(gb, 2), gemessen=gemessen, meldung=self.meldung)
+                              zustand=self.zustand, fremd=self.fremd_pid is not None,
+                              gb_jetzt=round(self.gb, 2) if laeuft and self.gb is not None else None, bedarf_gb=self.bedarf_gb,
+                              aktiv=laeuft and self.aktiv, anhalten_erlaubt=self.vorlage.leitstelle_anhalten, meldung=self.meldung)
 
 
 class Verwalter:
@@ -391,7 +415,8 @@ class Verwalter:
                 self._nebenbei(self._neustarten(d))
             if d.gb is not None and d.gb > (d.stand.spitze_gb or 0):
                 d.stand.spitze_gb = round(d.gb, 2)
-            geaendert = geaendert or d.bericht().model_dump(exclude={"gb"}) != vorher.model_dump(exclude={"gb"})
+            # Messwerte schwanken ständig; gemeldet wird nur, was sich in der Sache ändert (Zustand, Arbeit, Bedarf)
+            geaendert = geaendert or d.bericht().model_dump(exclude={"gb_jetzt"}) != vorher.model_dump(exclude={"gb_jetzt"})
         self._stand_speichern()
         if geaendert:
             self.aenderung.set()
@@ -434,10 +459,14 @@ class Verwalter:
             except Exception:                                   # die Schleife darf nie sterben
                 log.exception("Fehler in der Dienstprüfung")
 
-    async def befehl(self, b: Befehl) -> BefehlErgebnis:
+    async def befehl(self, b: Befehl, von_leitstelle: bool = False) -> BefehlErgebnis:
+        """Starten oder anhalten. Die Leitstelle darf nur anhalten, was die Dienstdatei ihr erlaubt; von Hand geht immer."""
         d = self.dienste.get(b.ziel)
         if d is None:
             return BefehlErgebnis(befehl=b.befehl, ziel=b.ziel, erfolg=False, meldung=f"unbekannter Dienst {b.ziel}")
+        if von_leitstelle and b.befehl == Befehlsart.DIENST_ANHALTEN and not d.vorlage.leitstelle_anhalten:
+            log.info("Leitstelle wollte %s anhalten; laut Dienstdatei nur von Hand", d.vorlage.name)
+            return BefehlErgebnis(befehl=b.befehl, ziel=b.ziel, erfolg=False, meldung="Anhalten nur von Hand (Dienstdatei: leitstelle_anhalten = false)")
         if b.befehl == Befehlsart.DIENST_STARTEN:
             d.stand.soll = Soll.LAEUFT
             d.abstuerze.clear()

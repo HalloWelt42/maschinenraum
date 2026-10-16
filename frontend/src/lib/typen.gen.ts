@@ -79,10 +79,13 @@ export interface DienstAnsicht {
   oberflaeche: string | null;
   zustand: Prozesszustand;
   fremd: boolean;
-  gb: number;
-  gemessen: boolean;
+  gb_jetzt: number | null;
+  bedarf_gb: number;
   spitze_gb: number | null;
   schaetzung_gb: number;
+  aktiv: boolean;
+  cpu_prozent: number | null;
+  anhalten_erlaubt: boolean;
   soll: Soll | null;
   meldung: string;
   datei: string;

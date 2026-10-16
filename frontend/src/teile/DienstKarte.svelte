@@ -37,14 +37,18 @@
   <header>
     <span class="zustand {z.klasse}"><i class="fa-solid {arbeitet ? 'fa-circle-notch fa-spin' : z.symbol}"></i>{arbeitet === 'starten' ? 'Startet' : arbeitet === 'anhalten' ? 'Hält an' : arbeitet === 'neustarten' ? 'Startet neu' : z.wort}</span>
     <h2>{d.name}</h2>
-    <div class="speicherzahl" title={d.gemessen ? 'Gemessener Speicher aller Prozesse des Dienstes' : d.spitze_gb ? 'Höchster gemessener Wert; so viel braucht er etwa beim nächsten Start' : 'Schätzung aus der Dienstdatei, bis er einmal gemessen wurde'}>
-      <b class="zahl">{gb(d.gb)}</b><span>{d.gemessen ? 'gemessen' : d.spitze_gb ? 'zuletzt höchstens' : 'geschätzt'}</span></div>
+    <div class="speicherzahl" title="Bedarf: höchster je gemessener Wert, mindestens die Schätzung der Dienstdatei ({gb(d.schaetzung_gb)}). Mit diesem Wert plant die Leitstelle.">
+      <b class="zahl">{gb(d.bedarf_gb)}</b><span>Bedarf{d.spitze_gb ? '' : ', geschätzt'}</span>
+      {#if d.gb_jetzt != null}<span class="jetzt" title="Gerade gemessen; Dienste laden ihre Modelle oft erst bei Bedarf">jetzt <b class="zahl">{gb(d.gb_jetzt)}</b></span>{/if}</div>
   </header>
 
   <div class="unter">
     {#each d.faehigkeiten as f (f)}<span class="faehigkeit {FAEHIGKEIT[f].klasse}"><i class="fa-solid {FAEHIGKEIT[f].symbol}"></i>{FAEHIGKEIT[f].wort}</span>{/each}
     {#if d.port}<span class="zahl" title="Port, auf dem der Dienst antwortet">Port {d.port}</span>{/if}
     {#if d.soll === 'laeuft'}<span title="Läuft nach einem Neustart des Rechners wieder an"><i class="fa-solid fa-rotate"></i> startet mit dem Rechner</span>{/if}
+    {#if d.aktiv}<span class="arbeitet" title="Prozessorlast {d.cpu_prozent} Prozent eines Kerns: der Dienst arbeitet gerade"><i class="fa-solid fa-gear fa-spin"></i> arbeitet</span>{/if}
+    <span title={d.anhalten_erlaubt ? 'Die Leitstelle darf ihn anhalten, wenn ein Modell den Speicher braucht und er nicht arbeitet' : 'Die Leitstelle darf ihn nicht anhalten; nur von Hand (Dienstdatei: leitstelle_anhalten = false)'}>
+      <i class="fa-solid {d.anhalten_erlaubt ? 'fa-tower-broadcast' : 'fa-lock'}"></i> {d.anhalten_erlaubt ? 'Leitstelle darf anhalten' : 'nur von Hand anhalten'}</span>
   </div>
   {#if d.beschreibung}<p class="beschreibung">{d.beschreibung}</p>{/if}
 
@@ -57,7 +61,7 @@
 
   {#if fragen}
     <div class="bestaetigen"><i class="fa-solid fa-triangle-exclamation"></i>
-      <span>{d.name} {fragen === 'anhalten' ? 'anhalten' : 'neu starten'}? Wer ihn gerade nutzt, verliert die Verbindung{fragen === 'anhalten' ? '; er gibt etwa ' + gb(d.gb) + ' frei' : ''}.</span>
+      <span>{d.name} {fragen === 'anhalten' ? 'anhalten' : 'neu starten'}? Wer ihn gerade nutzt, verliert die Verbindung{fragen === 'anhalten' && d.gb_jetzt != null ? '; er gibt etwa ' + gb(d.gb_jetzt) + ' frei' : ''}.</span>
       <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
         <button class="knopf klein gefahr-voll" onclick={() => tun(fragen as 'anhalten' | 'neustarten')}>{fragen === 'anhalten' ? 'Ja, anhalten' : 'Ja, neu starten'}</button></div></div>
   {/if}
@@ -83,7 +87,9 @@
   header h2 { font-size: var(--mr-gr-titel); }
   .speicherzahl { margin-left: auto; text-align: right; line-height: 1.2; }
   .speicherzahl b { display: block; font-size: var(--mr-gr-titel); font-weight: 600; }
-  .speicherzahl span { font-size: var(--mr-gr-marke); color: var(--mr-text-3); }
+  .speicherzahl span { display: block; font-size: var(--mr-gr-marke); color: var(--mr-text-3); }
+  .speicherzahl .jetzt b { display: inline; font-size: var(--mr-gr-marke); color: var(--mr-text-2); }
+  .arbeitet { color: var(--mr-akzent-schrift); }
   .unter { display: flex; align-items: center; gap: var(--mr-a2) var(--mr-a4); flex-wrap: wrap; font-size: var(--mr-gr-klein); color: var(--mr-text-2); }
   .beschreibung { color: var(--mr-text-2); font-size: var(--mr-gr-klein); }
   footer { display: flex; align-items: center; gap: var(--mr-a2); flex-wrap: wrap; }

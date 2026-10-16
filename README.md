@@ -63,6 +63,8 @@ Beispiel: [beispiele/bildwerkstatt.toml](beispiele/bildwerkstatt.toml).
 | `umgebung_datei` | keine | Datei mit Zeilen `NAME=WERT`, zum Beispiel die `.env` eines Projekts |
 | `pfad` | übliche Systempfade | Suchpfad für Programme |
 | `neustart` | ja | nach einem Absturz neu starten, solange der Dienst laufen soll |
+| `leitstelle_anhalten` | ja | die Leitstelle darf ihn anhalten, wenn ein Modell den Speicher braucht und er nicht arbeitet; nein: nur hier von Hand |
+| `aktiv_ab_prozent` | 5 | ab dieser Prozessorlast (Prozent eines Kerns) gilt er als arbeitend; arbeitende Dienste hält die Leitstelle nicht an |
 
 
 ## Abgrenzung je Dienst
@@ -76,6 +78,13 @@ Läuft ein Dienst schon, ohne vom Maschinenraum gestartet zu sein (sein Port ant
 er misst ihn und kann ihn anhalten (den lauschenden Prozess und dessen Nachfahren), startet ihn aber nicht
 doppelt. Der nächste Start geschieht dann durch den Maschinenraum.
 
+
+## Speicherbedarf
+
+Je Dienst gibt es zwei Zahlen. **Jetzt** ist, was seine Prozesse gerade belegen. **Bedarf** ist, was er laufend
+braucht: der höchste je gemessene Wert, mindestens die Schätzung `speicher_gb` der Dienstdatei. Viele Dienste laden
+ihre Modelle erst beim ersten Auftrag; gleich nach dem Start belegen sie wenig. Eine Leitstelle plant deshalb mit dem
+Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 
 ## Einstellungen
 

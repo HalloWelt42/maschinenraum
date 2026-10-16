@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from maschinenraum.konfig import Leitstelle, Ordner
-from maschinenraum.messen import Messer, speicher, swap_mac
+from maschinenraum.messen import Messer, rechenzeit, speicher, swap_mac
 from maschinenraum.protokoll import Befehl, Befehlsart, Prozesszustand
 from maschinenraum.prozesse import Soll, Verwalter
 
@@ -54,7 +54,8 @@ async def test_starten_messen_anhalten(tmp_path: Path):
     assert offen(port)
     await v.runde()
     b = v.liste().dienste[0]
-    assert b.zustand == Prozesszustand.LAEUFT and b.gemessen and 0 < b.gb < 2 and not b.fremd
+    assert b.zustand == Prozesszustand.LAEUFT and b.gb_jetzt is not None and 0 < b.gb_jetzt < 2 and not b.fremd
+    assert b.bedarf_gb >= max(b.gb_jetzt, 0.5)                    # mindestens die Schätzung der Dienstdatei
     assert (tmp_path / "protokolle" / "probe.log").exists()
     assert v.stand.dienste["probe"].soll == Soll.LAEUFT
     e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe"))
@@ -62,7 +63,8 @@ async def test_starten_messen_anhalten(tmp_path: Path):
     assert not offen(port)
     await v.runde()
     b = v.liste().dienste[0]
-    assert b.zustand == Prozesszustand.AUS and b.gb == v.stand.dienste["probe"].spitze_gb
+    assert b.zustand == Prozesszustand.AUS and b.gb_jetzt is None and not b.aktiv
+    assert b.bedarf_gb == round(max(v.stand.dienste["probe"].spitze_gb, 0.5), 2)   # Bedarf bleibt nach dem Anhalten bekannt
 
 
 async def test_absturz_fuehrt_zu_neustart(tmp_path: Path):
@@ -213,3 +215,47 @@ def test_swap_auch_mit_dezimalkomma():
     assert swap_mac("total = 18432.00M  used = 17117.56M  free = 1314.44M  (encrypted)") == (17117.56 / 1024, 18.0)
     assert swap_mac("total = 18432,00M  used = 17117,56M  free = 1314,44M  (encrypted)") == (17117.56 / 1024, 18.0)
     assert swap_mac("unbekannt") == (None, None)
+
+
+BESCHAEFTIGT = ("import socket, threading, time\n"
+                "s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(('127.0.0.1', {port})); s.listen()\n"
+                "threading.Thread(target=lambda: [None for _ in iter(int, 1)], daemon=True).start()\n"
+                "time.sleep(120)\n")
+
+
+async def test_arbeit_wird_an_der_prozessorlast_erkannt(tmp_path: Path):
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, port)
+    (tmp_path / "last.py").write_text(BESCHAEFTIGT.format(port=port))
+    datei = tmp_path / "dienste" / "probe.toml"
+    datei.write_text(datei.read_text().replace(f'"-m", "http.server", "{port}", "--bind", "127.0.0.1"', f'"{tmp_path}/last.py"'))
+    v = verwalter(o)
+    await v.runde()
+    assert (await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"))).erfolg
+    await v.runde()
+    await asyncio.sleep(1.0)
+    await v.runde()
+    d = v.dienste["probe"]
+    assert d.cpu_prozent is not None and d.cpu_prozent > 50 and d.bericht().aktiv
+    await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe"))
+    assert not d.bericht().aktiv
+
+
+async def test_leitstelle_darf_nur_anhalten_was_erlaubt_ist(tmp_path: Path):
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, port, leitstelle_anhalten="false")
+    v = verwalter(o)
+    await v.runde()
+    assert not v.liste().dienste[0].anhalten_erlaubt
+    assert (await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"), von_leitstelle=True)).erfolg   # starten darf sie
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe"), von_leitstelle=True)
+    assert not e.erfolg and "nur von Hand" in e.meldung and offen(port)
+    assert (await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe"))).erfolg                       # von Hand immer
+    assert not offen(port)
+
+
+def test_rechenzeit_aus_ps():
+    assert rechenzeit("0:01.50") == 1.5
+    assert rechenzeit("12:03.00") == 723.0
+    assert rechenzeit("1:00:00") == 3600.0
+    assert rechenzeit("2-01:00:00") == 2 * 86400 + 3600.0

@@ -220,6 +220,19 @@ def prozess_bytes(pid: int) -> int:
     return 0
 
 
+def rechenzeit(text: str) -> float:
+    """Prozessorzeit aus `ps -o time`: [[TT-]SS:]MM:SS[.hh] in Sekunden."""
+    tage = 0
+    if "-" in text:
+        t, text = text.split("-", 1)
+        tage = int(t)
+    teile = [float(x) for x in text.split(":")]
+    sekunden = 0.0
+    for teil in teile:
+        sekunden = sekunden * 60 + teil
+    return tage * 86400 + sekunden
+
+
 class Prozesstabelle:
     """Eine Momentaufnahme aller lebenden Prozesse (pid, Eltern, Gruppe), um Gruppen und Nachfahren zu finden.
     Zombies (beendet, noch nicht abgeholt) zählen nicht als lebend."""
@@ -227,28 +240,30 @@ class Prozesstabelle:
     def __init__(self) -> None:
         self.eltern: dict[int, int] = {}
         self.gruppe: dict[int, int] = {}
-        for pid, ppid, pgid, zustand in (self._ps() if MAC else self._proc()):
+        self.rechenzeit_s: dict[int, float] = {}      # verbrauchte Prozessorzeit seit Prozessstart
+        for pid, ppid, pgid, zustand, sekunden in (self._ps() if MAC else self._proc()):
             if not zustand.startswith("Z"):
-                self.eltern[pid], self.gruppe[pid] = ppid, pgid
+                self.eltern[pid], self.gruppe[pid], self.rechenzeit_s[pid] = ppid, pgid, sekunden
 
     @staticmethod
     def _ps():
-        for zeile in _befehl("ps", "-A", "-o", "pid=,ppid=,pgid=,stat=").splitlines():
+        for zeile in _befehl("ps", "-A", "-o", "pid=,ppid=,pgid=,stat=,time=").splitlines():
             teile = zeile.split()
-            if len(teile) == 4:
-                yield int(teile[0]), int(teile[1]), int(teile[2]), teile[3]
+            if len(teile) == 5:
+                yield int(teile[0]), int(teile[1]), int(teile[2]), teile[3], rechenzeit(teile[4])
 
     @staticmethod
     def _proc():
         """Linux ohne Zusatzprogramme: /proc/<pid>/stat, Felder nach dem Programmnamen in Klammern."""
+        takt = os.sysconf("SC_CLK_TCK")
         for eintrag in Path("/proc").iterdir():
             if not eintrag.name.isdigit():
                 continue
             try:
                 rest = (eintrag / "stat").read_text().rsplit(")", 1)[1].split()
-            except (OSError, IndexError):
+                yield int(eintrag.name), int(rest[1]), int(rest[2]), rest[0], (int(rest[11]) + int(rest[12])) / takt
+            except (OSError, IndexError, ValueError):
                 continue
-            yield int(eintrag.name), int(rest[1]), int(rest[2]), rest[0]
 
     def in_gruppe(self, pgid: int) -> list[int]:
         return [p for p, g in self.gruppe.items() if g == pgid]

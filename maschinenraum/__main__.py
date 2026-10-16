@@ -44,7 +44,8 @@ async def liste(ordner: Ordner) -> None:
         print(f"FEHLER  {f.datei}: {f.meldung}")
     for b in verwalter.liste().dienste:
         soll = verwalter.stand.dienste[b.kennung].soll
-        print(f"{b.zustand.value:9} {b.kennung:22} {b.gb:6.1f} GB  Port {b.port or '-':>5}  soll {soll.value if soll else '-':7} {b.meldung}")
+        jetzt = f"{b.gb_jetzt:6.1f}" if b.gb_jetzt is not None else "     -"
+        print(f"{b.zustand.value:9} {b.kennung:22} jetzt {jetzt} GB  Bedarf {b.bedarf_gb:6.1f} GB  Port {b.port or '-':>5}  soll {soll.value if soll else '-':7} {b.meldung}")
 
 
 def main() -> None:

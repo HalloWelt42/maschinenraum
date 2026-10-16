@@ -196,6 +196,6 @@ class Leitstellenkanal:
             log.warning("Ungültiger Befehl: %s", f.errors()[:1])
             return
         log.info("Befehl der Leitstelle: %s %s", b.befehl.value, b.ziel)
-        ergebnis = await self.verwalter.befehl(b)
+        ergebnis = await self.verwalter.befehl(b, von_leitstelle=True)
         with contextlib.suppress(websockets.exceptions.ConnectionClosed):
             await senden(_umschlag("knoten.befehl_ergebnis", ergebnis, bezug=u.id))
