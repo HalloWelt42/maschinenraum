@@ -3,6 +3,8 @@
     <ordner>/einstellungen.toml   Oberfläche, Messung, Neustartregeln, optional die Leitstelle
     <ordner>/schluessel           Schlüssel für die Leitstelle (nur für den Benutzer lesbar), wenn verbunden
     <ordner>/dienste/<name>.toml  je Dienst eine Datei; der Dateiname ist die Kennung
+    <ordner>/betrieb/<name>.toml  Steuerprogramme des Rechners (etwa das Stellwerk): starten, anhalten, öffnen;
+                                  keine KI, nie an die Leitstelle gemeldet. Das Programm trägt sich bei seiner Installation ein.
     <ordner>/protokolle/          Ausgabe des Maschinenraums und je Dienst eine Datei
     <ordner>/zustand.json         Sollzustand je Dienst (übersteht Neustarts) und gemessene Höchstwerte
 
@@ -128,6 +130,18 @@ class Ordner:
         return self.wurzel / "zustand.json"
 
     @property
+    def betrieb_ordner(self) -> Path:
+        return self.wurzel / "betrieb"
+
+    @property
+    def betrieb_protokolle(self) -> Path:
+        return self.protokolle / "betrieb"
+
+    @property
+    def betrieb_zustand_datei(self) -> Path:
+        return self.wurzel / "betrieb.json"
+
+    @property
     def einstellungsdatei(self) -> Path:
         return self.wurzel / "einstellungen.toml"
 
@@ -136,7 +150,7 @@ class Ordner:
         return self.wurzel / "schluessel"
 
     def anlegen(self) -> None:
-        for o in (self.wurzel, self.dienste_ordner, self.protokolle):
+        for o in (self.wurzel, self.dienste_ordner, self.protokolle, self.betrieb_ordner):
             o.mkdir(parents=True, exist_ok=True)
         self.wurzel.chmod(0o700)
         if not self.einstellungsdatei.exists():
@@ -167,6 +181,10 @@ class Ordner:
         fd = os.open(self.schluesseldatei, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(schluessel)
+
+    def betrieb(self) -> tuple[list[Vorlage], list[Ladefehler]]:
+        """Steuerprogramme unter betrieb/ (Vorlagen des Dienstkerns, ohne Fähigkeiten)."""
+        return dateien_lesen(self.betrieb_ordner, Vorlage)
 
     def dienste(self) -> tuple[list[DienstVorlage], list[Ladefehler]]:
         """Alle Dienstdateien; fehlerhafte werden gemeldet und ausgelassen, nie geraten."""

@@ -14,7 +14,11 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dienstkern.dienst import Dienst
+from dienstkern.verwalter import Ergebnis
+from dienstkern.verwalter import Verwalter as Kernverwalter
 from dienstkern.vorlage import Ladefehler
+from dienstkern.zustand import Zustand
 from dienstkern.web import Protokollauszug, oberflaeche_ausliefern, protokoll_ende, schutz_einrichten
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -53,6 +57,21 @@ class DienstAnsicht(BaseModel):
     ordner: str
 
 
+class BetriebAnsicht(BaseModel):
+    """Ein Steuerprogramm des Rechners (etwa das Stellwerk): nur starten, anhalten, öffnen; keine KI."""
+
+    kennung: str
+    name: str
+    beschreibung: str
+    oberflaeche: str | None
+    zustand: Zustand
+    soll: Soll | None
+    gb_jetzt: float | None
+    meldung: str
+    datei: str
+    protokolldatei: str
+
+
 class Stand(BaseModel):
     version: str
     rechner: str
@@ -61,6 +80,7 @@ class Stand(BaseModel):
     einstellungen: Einstellungen      # ohne Geheimnisse; der Schlüssel liegt in einer eigenen Datei
     messwerte: Messwerte | None
     dienste: list[DienstAnsicht]
+    betrieb: list[BetriebAnsicht]
     ladefehler: list[Ladefehler]
     leitstelle: LeitstellenStand
     nachbar: nachbar.NachbarStand
@@ -79,6 +99,9 @@ class Laufzeit:
         e = ordner.einstellungen()
         self.messer = Messer(e.messung.takt_s, e.messung.macmon)
         self.verwalter = Verwalter(ordner, e)
+        # Steuerprogramme (Stellwerk ...) mit derselben Dienststeuerung, aber eigenem Stand; die Leitstelle sieht sie nie
+        self.betrieb = Kernverwalter(ordner.betrieb, ordner.betrieb_protokolle, ordner.betrieb_zustand_datei, e.neustart,
+                                     e.messung.takt_s, herkunft="vom Maschinenraum")
         self.kanal = Leitstellenkanal(ordner, self.verwalter, self.messer)
         self.messwerte: Messwerte | None = None
         self.nachbar = nachbar.NachbarStand(adresse=e.nachbar.modell_laeufer)
@@ -94,7 +117,8 @@ class Laufzeit:
             await asyncio.sleep(self.verwalter.einstellungen.messung.takt_s)
 
     async def starten(self) -> None:
-        self.aufgaben = [asyncio.create_task(self.verwalter.schleife(), name="dienste"), asyncio.create_task(self._messen(), name="messen")]
+        self.aufgaben = [asyncio.create_task(self.verwalter.schleife(), name="dienste"), asyncio.create_task(self.betrieb.schleife(), name="betrieb"),
+                         asyncio.create_task(self._messen(), name="messen")]
         self.kanal.starten()
 
     async def beenden(self) -> None:
@@ -103,7 +127,17 @@ class Laufzeit:
             t.cancel()
         await asyncio.gather(*self.aufgaben, return_exceptions=True)
         await self.verwalter.beenden()
+        await self.betrieb.beenden()
         self.messer.beenden()
+
+    def betrieb_ansicht(self) -> list[BetriebAnsicht]:
+        aus = []
+        for d in self.betrieb.dienste.values():
+            b = d.bericht()
+            aus.append(BetriebAnsicht(kennung=b.kennung, name=b.name, beschreibung=d.vorlage.beschreibung, oberflaeche=d.vorlage.oberflaeche,
+                                      zustand=b.zustand, soll=b.soll, gb_jetzt=b.gb_jetzt, meldung=b.meldung,
+                                      datei=str(self.ordner.betrieb_ordner / f"{b.kennung}.toml"), protokolldatei=str(d.protokolldatei())))
+        return aus
 
     def ansicht(self) -> list[DienstAnsicht]:
         ergebnis = []
@@ -121,7 +155,8 @@ class Laufzeit:
         e = self.verwalter.einstellungen
         return Stand(version=__version__, rechner=e.name or socket.gethostname().removesuffix(".local"), zeit=time.time(), ordner=str(self.ordner.wurzel),
                      einstellungen=self.ordner.einstellungen(),
-                     messwerte=self.messwerte, dienste=self.ansicht(), ladefehler=self.verwalter.ladefehler, leitstelle=self.kanal.stand, nachbar=self.nachbar)
+                     messwerte=self.messwerte, dienste=self.ansicht(), betrieb=self.betrieb_ansicht(),
+                     ladefehler=self.verwalter.ladefehler + [f.model_copy(update={"datei": f"betrieb/{f.datei}"}) for f in self.betrieb.ladefehler], leitstelle=self.kanal.stand, nachbar=self.nachbar)
 
 
 def erstellen(ordner: Ordner) -> FastAPI:
@@ -170,6 +205,29 @@ def erstellen(ordner: Ordner) -> FastAPI:
     @app.get("/api/dienste/{kennung}/protokoll")
     async def protokoll(kennung: str, zeilen: int = 200) -> Protokollauszug:
         datei = dienst(kennung).protokolldatei()
+        return Protokollauszug(datei=str(datei), zeilen=await asyncio.to_thread(protokoll_ende, datei, zeilen))
+
+    def steuerprogramm(kennung: str) -> Dienst:
+        d = lz.betrieb.dienste.get(kennung)
+        if d is None:
+            raise HTTPException(404, "Dieses Steuerprogramm gibt es nicht.")
+        return d
+
+    @app.post("/api/betrieb/{kennung}/starten")
+    async def betrieb_starten(kennung: str) -> Ergebnis:
+        return await lz.betrieb.starten(steuerprogramm(kennung).kennung)
+
+    @app.post("/api/betrieb/{kennung}/anhalten")
+    async def betrieb_anhalten(kennung: str) -> Ergebnis:
+        return await lz.betrieb.anhalten(steuerprogramm(kennung).kennung)
+
+    @app.post("/api/betrieb/{kennung}/neustarten")
+    async def betrieb_neustarten(kennung: str) -> Ergebnis:
+        return await lz.betrieb.neu_starten(steuerprogramm(kennung).kennung)
+
+    @app.get("/api/betrieb/{kennung}/protokoll")
+    async def betrieb_protokoll(kennung: str, zeilen: int = 200) -> Protokollauszug:
+        datei = steuerprogramm(kennung).protokolldatei()
         return Protokollauszug(datei=str(datei), zeilen=await asyncio.to_thread(protokoll_ende, datei, zeilen))
 
     @app.get("/api/protokoll")

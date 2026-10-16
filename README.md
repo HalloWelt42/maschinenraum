@@ -10,7 +10,8 @@ Datenbanken und Docker verwaltet das [Stellwerk](https://github.com/HalloWelt42/
 Leitstelle.
 
 - **Oberfläche im Browser** unter `http://127.0.0.1:8540/`, nur auf diesem Rechner erreichbar.
-- **Menüleistensymbol** auf dem Mac: Dienste mit Schaltern, Speicher, Oberfläche öffnen.
+- **Menüleistensymbol** auf dem Mac, das zentrale Steuerwerk des Rechners: KI-Dienste mit Schaltern, Speicher, darunter
+  der Betrieb (Stellwerk starten, anhalten, öffnen und seine Webapps schalten) und der Weg zur Leitstelle.
 - **Übersteht Neustarts:** läuft als launchd- oder systemd-Dienst; was laufen soll, startet wieder.
 - **Abstürze** werden mit Pausen neu gestartet; stürzt ein Dienst zu oft ab, bleibt er aus.
 - **Optional mit Leitstelle:** eine Leitstelle im Netz kann die Dienste mit einplanen, starten und anhalten
@@ -52,6 +53,8 @@ Dienst ein. Derselbe Befehl aktualisiert; Dienstdateien, Einstellungen und Sollz
 | `protokolle/maschinenraum.log` | Ausgabe des Maschinenraums |
 | `protokolle/<kennung>.log` | Ausgabe des Dienstes |
 | `zustand.json` | Sollzustand je Dienst und gemessene Höchstwerte |
+| `betrieb/<kennung>.toml` | Steuerprogramme des Rechners (etwa das Stellwerk), von deren Installation eingetragen |
+| `betrieb.json` | Sollzustand der Steuerprogramme |
 | `schluessel` | Schlüssel für die Leitstelle, nur für den Benutzer lesbar |
 
 Neue oder geänderte Dienstdateien liest der Maschinenraum im nächsten Takt; ein Neustart ist nicht nötig. Stand
@@ -99,6 +102,20 @@ Jeder Dienst hat mindestens eine Fähigkeit: Die Leitstelle sieht ihn, kann ihn 
 die Durchleitung an ihn richten. Sie vermittelt nur Fähigkeiten; sie lädt selbst nie ein Modell. Programme ohne
 Fähigkeit (Oberflächen und Backends eigener Webapps, ihre Datenbanken, Docker) gehören nicht hierher, sondern ins
 Stellwerk; eine solche Datei übergeht der Maschinenraum mit einem Hinweis.
+
+## Betrieb: Steuerprogramme
+
+Neben den KI-Diensten startet, hält an und öffnet der Maschinenraum die Steuerprogramme des Rechners, zuerst das
+[Stellwerk](https://github.com/HalloWelt42/stellwerk), das die eigenen Webapps startet. Ein Steuerprogramm trägt sich
+bei seiner Installation unter `betrieb/` ein (Felder wie eine Dienstdatei, ohne Fähigkeiten; meist `steuerung =
+"befehle"` mit dem Start- und Anhaltebefehl des Systemdienstes). Steuerprogramme sind keine KI: die Leitstelle sieht
+sie nie. Im Menüleistensymbol stehen sie unter Betrieb, mit den Webapps des Stellwerks darunter; geschaltet werden
+die Webapps beim Stellwerk selbst.
+
+| Aufruf | Wirkung |
+|---|---|
+| `POST /api/betrieb/<kennung>/starten`, `/anhalten`, `/neustarten` | Steuerprogramm schalten |
+| `GET /api/betrieb/<kennung>/protokoll` | Ausgabe der Start- und Anhaltebefehle |
 
 ## Abgrenzung je Dienst
 

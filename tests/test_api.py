@@ -63,3 +63,35 @@ def test_leitstelle_eintragen_und_entfernen(tmp_path: Path):
         assert c.put("/api/leitstelle", json={"adresse": "leitstelle:8530"}, headers=SCHREIBEN).status_code == 422
         r = c.put("/api/leitstelle", json={"adresse": "", "schluessel": ""}, headers=SCHREIBEN).json()
         assert r["zustand"] == "aus" and o.schluessel() is None and o.einstellungen().leitstelle.adresse is None
+
+
+def test_steuerprogramm_im_betrieb(tmp_path: Path):
+    """Ein Steuerprogramm unter betrieb/ (wie das Stellwerk) lässt sich starten, anhalten und öffnen; es ist kein
+    KI-Dienst, steht nicht unter dienste und wird der Leitstelle nie gemeldet."""
+    import sys
+    o = ordner_mit_dienst(tmp_path, freier_port())
+    port = freier_port()
+    (tmp_path / "betrieb").mkdir()
+    (tmp_path / "betrieb" / "stellwerk.toml").write_text(
+        f'name = "Stellwerk"\nbeschreibung = "Startet Anwendungen"\nordner = "{tmp_path}"\n'
+        f'befehl = ["{sys.executable}", "-m", "http.server", "{port}", "--bind", "127.0.0.1"]\nport = {port}\n'
+        f'oberflaeche = "http://127.0.0.1:{port}"\nstartzeit_s = 15\nanhaltezeit_s = 5\n')
+    (tmp_path / "betrieb" / "kaputt.toml").write_text('name = "x"\nfaehigkeiten = ["stimme"]\n')
+    with client(o) as c:
+        for _ in range(30):
+            s = c.get("/api/stand").json()
+            if s["betrieb"]:
+                break
+            time.sleep(0.1)
+        b = s["betrieb"][0]
+        assert b["kennung"] == "stellwerk" and b["zustand"] == "aus" and b["oberflaeche"] == f"http://127.0.0.1:{port}"
+        assert [d["kennung"] for d in s["dienste"]] == ["probe"]
+        assert any(f["datei"] == "betrieb/kaputt.toml" for f in s["ladefehler"])
+        r = c.post("/api/betrieb/stellwerk/starten", headers=SCHREIBEN).json()
+        assert r["erfolg"], r
+        assert offen(port)
+        assert any("gestartet vom Maschinenraum" in z for z in c.get("/api/betrieb/stellwerk/protokoll").json()["zeilen"])
+        assert c.app.state.laufzeit.verwalter.liste().dienste[0].kennung == "probe"      # die Leitstelle sieht nur KI-Dienste
+        assert c.post("/api/betrieb/stellwerk/anhalten", headers=SCHREIBEN).json()["erfolg"]
+        assert not offen(port)
+        assert c.post("/api/betrieb/gibtsnicht/starten", headers=SCHREIBEN).status_code == 404

@@ -4,6 +4,7 @@
   import type { Stand } from '../lib/typen.gen';
   import { VERBINDUNG, ZUSTAND, dienstfarbe } from '../lib/wort';
   import { weg } from '../lib/weg.svelte';
+  import BetriebKarte from '../teile/BetriebKarte.svelte';
   import Protokoll from '../teile/Protokoll.svelte';
   import Schalter from '../teile/Schalter.svelte';
   import SpeicherKarte from '../teile/SpeicherKarte.svelte';
@@ -58,6 +59,7 @@
         </section>
       </div>
       <div class="rechts">
+        {#if s.betrieb.length}<BetriebKarte programme={s.betrieb} />{/if}
         <SpeicherKarte stand={s} />
         <section class="karte">
           <h3><i class="fa-solid fa-tower-broadcast"></i> Leitstelle <span class="rechts"><span class="zustand {VERBINDUNG[s.leitstelle.zustand].klasse}">{VERBINDUNG[s.leitstelle.zustand].wort}</span></span></h3>

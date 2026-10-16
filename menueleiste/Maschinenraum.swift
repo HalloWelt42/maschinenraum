@@ -1,6 +1,7 @@
-// Menüleistensymbol des Maschinenraums: Schnellzugriff auf die Dienste dieses Rechners.
-// Holt den Stand von der lokalen Schnittstelle (Port aus Info.plist), schaltet Dienste und öffnet die Oberfläche.
-// Es verwaltet selbst nichts; die Wahrheit liegt im Maschinenraum.
+// Menüleistensymbol des Maschinenraums: das zentrale Steuerwerk dieses Rechners.
+// Oben die KI-Dienste (Maschinenraum), darunter der Betrieb: Steuerprogramme wie das Stellwerk (starten, anhalten,
+// öffnen) und dessen Webapps mit Schaltern, dazu der Weg zur Leitstelle.
+// Es verwaltet selbst nichts: KI-Dienste und Steuerprogramme schaltet der Maschinenraum, Webapps das Stellwerk.
 
 import AppKit
 import SwiftUI
@@ -23,20 +24,44 @@ struct Dienst: Decodable, Identifiable {
     var laeuft: Bool { zustand == "laeuft" || zustand == "startet" || zustand == "stoppt" }
 }
 
-struct Leitstelle: Decodable { let zustand: String }
+struct Leitstelle: Decodable { let zustand: String; let adresse: String? }
+
+struct Steuerprogramm: Decodable, Identifiable {
+    let kennung: String
+    let name: String
+    let zustand: String
+    let oberflaeche: String?
+    var id: String { kennung }
+    var laeuft: Bool { zustand == "laeuft" || zustand == "startet" || zustand == "stoppt" }
+}
 
 struct Stand: Decodable {
     let rechner: String
     let messwerte: Messwerte?
     let dienste: [Dienst]
+    let betrieb: [Steuerprogramm]
     let leitstelle: Leitstelle
 }
+
+// Webapps eines Steuerprogramms, das welche führt (das Stellwerk); andere Programme liefern keine
+struct Webapp: Decodable, Identifiable {
+    let kennung: String
+    let name: String
+    let zustand: String
+    let oberflaeche: String?
+    let gb_jetzt: Double?
+    var id: String { kennung }
+    var an: Bool { zustand != "aus" && zustand != "gestoert" }
+}
+
+struct Webapps: Decodable { let apps: [Webapp] }
 
 @MainActor
 final class Modell: ObservableObject {
     @Published var stand: Stand?
     @Published var erreichbar = true
     @Published var arbeitet: Set<String> = []
+    @Published var webapps: [String: [Webapp]] = [:]      // je Steuerprogramm seine Webapps
     let basis: URL
     private var zeitgeber: Timer?
 
@@ -57,6 +82,45 @@ final class Modell: ObservableObject {
         } catch {
             erreichbar = false
         }
+        await webappsHolen()
+    }
+
+    func webappsHolen() async {
+        var neu: [String: [Webapp]] = [:]
+        for p in stand?.betrieb ?? [] where p.laeuft {
+            guard let o = p.oberflaeche, let url = URL(string: o)?.appendingPathComponent("api/stand") else { continue }
+            if let (daten, _) = try? await URLSession.shared.data(from: url), let w = try? JSONDecoder().decode(Webapps.self, from: daten) {
+                neu[p.kennung] = w.apps
+            }
+        }
+        webapps = neu
+    }
+
+    private func senden(_ url: URL, kopf: String) async {
+        var anfrage = URLRequest(url: url)
+        anfrage.httpMethod = "POST"
+        anfrage.timeoutInterval = 900
+        anfrage.setValue("1", forHTTPHeaderField: kopf)
+        _ = try? await URLSession.shared.data(for: anfrage)
+    }
+
+    func schalten(_ p: Steuerprogramm) async {
+        arbeitet.insert("betrieb:" + p.kennung)
+        await senden(basis.appendingPathComponent("api/betrieb/\(p.kennung)/\(p.laeuft ? "anhalten" : "starten")"), kopf: "X-Maschinenraum")
+        arbeitet.remove("betrieb:" + p.kennung)
+        await holen()
+    }
+
+    func schalten(_ a: Webapp, bei p: Steuerprogramm) async {
+        guard let o = p.oberflaeche, let url = URL(string: o) else { return }
+        arbeitet.insert("app:" + a.kennung)
+        await senden(url.appendingPathComponent("api/apps/\(a.kennung)/\(a.an ? "anhalten" : "starten")"), kopf: "X-Stellwerk")
+        arbeitet.remove("app:" + a.kennung)
+        await holen()
+    }
+
+    func oeffnen(_ adresse: String) {
+        if let url = URL(string: adresse) { NSWorkspace.shared.open(url) }
     }
 
     func schalten(_ d: Dienst) async {
@@ -70,6 +134,16 @@ final class Modell: ObservableObject {
     }
 
     func oeffnen() { NSWorkspace.shared.open(basis) }
+
+}
+
+func farbe(_ zustand: String) -> Color {
+    switch zustand {
+    case "gestoert": return .red
+    case "laeuft": return .green
+    case "aus": return .gray.opacity(0.5)
+    default: return .orange
+    }
 }
 
 func gb(_ wert: Double) -> String {
@@ -99,6 +173,7 @@ struct Ansicht: View {
                 }
             }
             Divider()
+            Text("KI-Dienste").font(.caption).foregroundStyle(.secondary)
             if let dienste = modell.stand?.dienste, !dienste.isEmpty {
                 ForEach(dienste) { d in
                     HStack(spacing: 8) {
@@ -116,14 +191,56 @@ struct Ansicht: View {
                     }
                 }
             } else {
-                Text("Keine Dienste eingetragen.").foregroundStyle(.secondary)
+                Text("Keine KI-Dienste eingetragen.").foregroundStyle(.secondary)
+            }
+            if let programme = modell.stand?.betrieb, !programme.isEmpty {
+                Divider()
+                Text("Betrieb").font(.caption).foregroundStyle(.secondary)
+                ForEach(programme) { p in
+                    HStack(spacing: 8) {
+                        Circle().fill(farbe(p.zustand)).frame(width: 9, height: 9)
+                        Text(p.name).lineLimit(1)
+                        Spacer()
+                        if let o = p.oberflaeche, p.laeuft {
+                            Button { modell.oeffnen(o) } label: { Image(systemName: "arrow.up.right.square") }
+                                .buttonStyle(.borderless).help("\(p.name) öffnen")
+                        }
+                        if modell.arbeitet.contains("betrieb:" + p.kennung) {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Toggle("", isOn: Binding(get: { p.laeuft }, set: { _ in Task { await modell.schalten(p) } }))
+                                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                        }
+                    }
+                    ForEach(modell.webapps[p.kennung] ?? []) { a in
+                        HStack(spacing: 8) {
+                            Circle().fill(farbe(a.zustand)).frame(width: 7, height: 7)
+                            Text(a.name).lineLimit(1)
+                            Spacer()
+                            if let jetzt = a.gb_jetzt { Text(gb(jetzt)).monospacedDigit().foregroundStyle(.secondary) }
+                            if let o = a.oberflaeche, a.zustand == "laeuft" {
+                                Button { modell.oeffnen(o) } label: { Image(systemName: "arrow.up.right.square") }
+                                    .buttonStyle(.borderless).help("\(a.name) im Browser öffnen")
+                            }
+                            if modell.arbeitet.contains("app:" + a.kennung) {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Toggle("", isOn: Binding(get: { a.an }, set: { _ in Task { await modell.schalten(a, bei: p) } }))
+                                    .toggleStyle(.switch).labelsHidden().controlSize(.mini)
+                            }
+                        }.padding(.leading, 17)
+                    }
+                }
             }
             Divider()
             HStack {
                 Button("Oberfläche öffnen") { modell.oeffnen() }
+                if let adresse = modell.stand?.leitstelle.adresse {
+                    Button("Leitstelle") { modell.oeffnen(adresse) }.help("Leitstelle öffnen: verteilt die Aufträge an die KI")
+                }
                 Spacer()
                 Button("Symbol beenden") { NSApplication.shared.terminate(nil) }
-                    .help("Beendet nur dieses Symbol; der Maschinenraum und seine Dienste laufen weiter")
+                    .help("Beendet nur dieses Symbol; Maschinenraum, Stellwerk und alle Dienste laufen weiter")
             }
         }
         .padding(14)

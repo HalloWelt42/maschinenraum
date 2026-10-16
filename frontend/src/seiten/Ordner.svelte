@@ -8,7 +8,8 @@
   const pfade = $derived([
     ['Ordner', s.ordner, 'alles an einem Ort'],
     ['Einstellungen', `${s.ordner}/einstellungen.toml`, 'Oberfläche, Durchleitung, Messung, Neustartregeln, Leitstelle'],
-    ['Dienste', `${s.ordner}/dienste/`, 'je Dienst eine Datei; der Dateiname ist die Kennung'],
+    ['Dienste', `${s.ordner}/dienste/`, 'je KI-Dienst eine Datei; der Dateiname ist die Kennung'],
+    ['Betrieb', `${s.ordner}/betrieb/`, 'Steuerprogramme wie das Stellwerk; tragen sich bei ihrer Installation ein'],
     ['Protokolle', `${s.ordner}/protokolle/`, 'Ausgabe des Maschinenraums und je Dienst eine Datei'],
     ['Zustand', `${s.ordner}/zustand.json`, 'Sollzustand je Dienst und gemessene Höchstwerte'],
   ]);

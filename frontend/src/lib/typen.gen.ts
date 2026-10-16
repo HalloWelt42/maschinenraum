@@ -29,6 +29,11 @@ export type Prozesszustand = 'aus' | 'startet' | 'laeuft' | 'stoppt' | 'gestoert
 export type Soll = 'laeuft' | 'aus';
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Zustand".
+ */
+export type Zustand = 'aus' | 'startet' | 'laeuft' | 'stoppt' | 'gestoert';
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Verbindung".
  */
 export type Verbindung = 'aus' | 'ohne_schluessel' | 'verbindet' | 'verbunden' | 'abgewiesen' | 'nicht_erreichbar';
@@ -41,6 +46,7 @@ export type Befehlsart = 'dienst_starten' | 'dienst_anhalten';
 export interface Maschinenraum {
   Stand?: Stand;
   BefehlErgebnis?: BefehlErgebnis;
+  Ergebnis?: Ergebnis;
   Protokollauszug?: Protokollauszug;
   LeitstellenDaten?: LeitstellenDaten;
 }
@@ -56,6 +62,7 @@ export interface Stand {
   einstellungen: Einstellungen;
   messwerte: Messwerte | null;
   dienste: DienstAnsicht[];
+  betrieb: BetriebAnsicht[];
   ladefehler: Ladefehler[];
   leitstelle: LeitstellenStand;
   nachbar: NachbarStand;
@@ -203,6 +210,24 @@ export interface DienstAnsicht {
   ordner: string;
 }
 /**
+ * Ein Steuerprogramm des Rechners (etwa das Stellwerk): nur starten, anhalten, öffnen; keine KI.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "BetriebAnsicht".
+ */
+export interface BetriebAnsicht {
+  kennung: string;
+  name: string;
+  beschreibung: string;
+  oberflaeche: string | null;
+  zustand: Zustand;
+  soll: Soll | null;
+  gb_jetzt: number | null;
+  meldung: string;
+  datei: string;
+  protokolldatei: string;
+}
+/**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Ladefehler".
  */
@@ -248,6 +273,15 @@ export interface NachbarModell {
  */
 export interface BefehlErgebnis {
   befehl: Befehlsart;
+  ziel: string;
+  erfolg: boolean;
+  meldung: string;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Ergebnis".
+ */
+export interface Ergebnis {
   ziel: string;
   erfolg: boolean;
   meldung: string;

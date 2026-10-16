@@ -1,6 +1,6 @@
 // Zugriff auf die lokale Schnittstelle /api/*. Schreibende Aufrufe tragen den Kopf X-Maschinenraum,
 // den fremde Webseiten nicht setzen dürfen.
-import type { BefehlErgebnis, LeitstellenDaten, LeitstellenStand, Protokollauszug, Stand } from './typen.gen';
+import type { BefehlErgebnis, Ergebnis, LeitstellenDaten, LeitstellenStand, Protokollauszug, Stand } from './typen.gen';
 
 export class ApiFehler extends Error {
   constructor(public grund: string, public begruendung: string, public status: number) {
@@ -29,4 +29,6 @@ export const api = {
   protokoll: (k: string, zeilen = 300) => rufen<Protokollauszug>(`/dienste/${k}/protokoll?zeilen=${zeilen}`),
   eigenesProtokoll: (zeilen = 300) => rufen<Protokollauszug>(`/protokoll?zeilen=${zeilen}`),
   leitstelle: (d: LeitstellenDaten) => rufen<LeitstellenStand>('/leitstelle', 'PUT', d),
+  betrieb: (k: string, s: 'starten' | 'anhalten' | 'neustarten') => rufen<Ergebnis>(`/betrieb/${k}/${s}`, 'POST'),
+  betriebProtokoll: (k: string, zeilen = 300) => rufen<Protokollauszug>(`/betrieb/${k}/protokoll?zeilen=${zeilen}`),
 };

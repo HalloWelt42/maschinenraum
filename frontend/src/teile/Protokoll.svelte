@@ -1,9 +1,10 @@
 <script lang="ts">
-  // Ende einer Protokolldatei, alle zwei Sekunden neu, solange sichtbar. Ohne Kennung: das eigene Protokoll.
+  // Ende einer Protokolldatei, alle zwei Sekunden neu, solange sichtbar. Ohne Kennung: das eigene Protokoll;
+  // mit betrieb: das eines Steuerprogramms (Stellwerk ...).
   import { onDestroy } from 'svelte';
   import { api } from '../lib/api';
 
-  let { kennung = null, zeilen: anzahl = 300 }: { kennung?: string | null; zeilen?: number } = $props();
+  let { kennung = null, betrieb = false, zeilen: anzahl = 300 }: { kennung?: string | null; betrieb?: boolean; zeilen?: number } = $props();
 
   let zeilen = $state<string[]>([]);
   let datei = $state('');
@@ -14,7 +15,7 @@
     if (!laeuft) return;
     try {
       const unten = !feld || feld.scrollHeight - feld.scrollTop - feld.clientHeight < 40;
-      const p = kennung ? await api.protokoll(kennung, anzahl) : await api.eigenesProtokoll(anzahl);
+      const p = !kennung ? await api.eigenesProtokoll(anzahl) : betrieb ? await api.betriebProtokoll(kennung, anzahl) : await api.protokoll(kennung, anzahl);
       zeilen = p.zeilen;
       datei = p.datei;
       if (unten) requestAnimationFrame(() => feld && (feld.scrollTop = feld.scrollHeight));
