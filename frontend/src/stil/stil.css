@@ -1,5 +1,5 @@
 /*
- * Maschinenraum - Gestaltung (Marken und Bausteine wie in der Leitstelle, Präfix --mr-)
+ * Maschinenraum - Gestaltung (Marken und Bausteine wie in der Leitstelle, Präfix --mr-; Flächen Kesselraum in farben.css)
  *
  * Schriften kommen über die npm-Pakete (main.ts). Änderungen an der Optik zuerst im Entwurf, dann hier.
  * Alle Farben, Größen, Ecken und Abstände sind Marken (--mr-*); die
@@ -9,7 +9,7 @@
  * mildes Hell, beide mit geprüften Kontrasten.
  *
  * Regeln: Grundschrift 18 px, kleine Texte 16 px, Marken nie unter 14 px.
- * Schriftstufen (normal, gross, sehr-gross) über data-schrift am <html>.
+ * Schriftstufen (gross als Vorgabe, mittel, klein) über data-schrift am <html>.
  * Keine einseitigen Ränder als Hervorhebung, keine Leuchtleisten, kein
  * !important.
  */
@@ -48,14 +48,16 @@
   --mr-ruhig: 320ms;
 }
 
-/* Schriftstufen: eine Einstellung, je Gerät gemerkt */
-:root[data-schrift="gross"] {
-  --mr-gr-seite: 36px; --mr-gr-titel: 25px; --mr-gr-text: 20px; --mr-gr-klein: 18px; --mr-gr-marke: 16px; --mr-gr-kennzahl: 34px;
-  --mr-seite-breite: 288px;
+/* Schriftstufen: eine Einstellung, je Gerät gemerkt. Groß ist die Vorgabe (die Werte oben), Mittel und Klein
+   verkleinern auf Wunsch des Nutzers (16.10.2026: "das was jetzt normal ist, sollte das größte sein").
+   Klein unterschreitet für Etiketten die sonstige Untergrenze von 14 px bewusst. */
+:root[data-schrift="mittel"] {
+  --mr-gr-seite: 30px; --mr-gr-titel: 21px; --mr-gr-text: 17px; --mr-gr-klein: 15px; --mr-gr-marke: 14px; --mr-gr-kennzahl: 27px;
+  --mr-seite-breite: 248px;
 }
-:root[data-schrift="sehr-gross"] {
-  --mr-gr-seite: 40px; --mr-gr-titel: 28px; --mr-gr-text: 22px; --mr-gr-klein: 20px; --mr-gr-marke: 18px; --mr-gr-kennzahl: 38px;
-  --mr-seite-breite: 312px; --mr-kopf-hoehe: 68px;
+:root[data-schrift="klein"] {
+  --mr-gr-seite: 27px; --mr-gr-titel: 19px; --mr-gr-text: 16px; --mr-gr-klein: 14px; --mr-gr-marke: 13px; --mr-gr-kennzahl: 24px;
+  --mr-seite-breite: 232px; --mr-kopf-hoehe: 58px;
 }
 
 /* ═══ Marken: sanftes Dunkel (Vorgabe) ═══════════════════════════════════ */
@@ -396,7 +398,8 @@ code, .code { font-family: var(--mr-schrift-code); font-size: 0.92em; background
 .seitenkopf { display: flex; align-items: flex-end; gap: var(--mr-a4); margin-bottom: var(--mr-a5); flex-wrap: wrap; }
 .seitenkopf .zahl { color: var(--mr-text-3); font-size: var(--mr-gr-titel); font-weight: 500; }
 .seitenkopf .aktionen { margin-left: auto; display: flex; gap: var(--mr-a2); flex-wrap: wrap; }
-.seitenkopf .unterzeile { width: 100%; margin-top: calc(-1 * var(--mr-a2)); color: var(--mr-text-2); max-width: 900px; }
+/* eigene Zeile unter dem Titel (volle Breite erzwingt den Umbruch), Text höchstens 900 px breit */
+.seitenkopf .unterzeile { width: 100%; margin-top: calc(-1 * var(--mr-a2)); color: var(--mr-text-2); padding-right: max(0px, calc(100% - 900px)); }
 
 /* ═══ Seitenrahmen: fester Kopf, eigenes Rollfeld ════════════════════════ */
 

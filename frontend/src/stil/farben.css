@@ -1,0 +1,38 @@
+/*
+ * Flächen "Kesselraum" (Wahl des Nutzers, 16.10.2026): warmes Anthrazit mit leichtem Braunstich statt des
+ * Blaugraus der Leitstelle, damit man beide Oberflächen auf einen Blick unterscheidet. Akzent, Bedeutungsfarben
+ * und alle Bausteine bleiben wie in der Leitstelle. Gilt mit data-flaechen="kesselraum" am <html>.
+ */
+
+:root[data-flaechen="kesselraum"]:not([data-theme="hell"]) {
+  --mr-grund: #1f1c1a;
+  --mr-leiste: #161413;
+  --mr-flaeche: #272320;
+  --mr-karte: #2f2a27;
+  --mr-karte-2: #39332f;
+  --mr-karte-3: #443d38;
+  --mr-mulde: #110f0e;
+  --mr-text: #f5f0eb;
+  --mr-text-2: #c8bcb1;
+  --mr-text-3: #9a8c80;
+  --mr-rand: rgba(255, 238, 222, 0.08);
+  --mr-rand-stark: rgba(255, 238, 222, 0.16);
+  --mr-schleier: rgba(14, 11, 9, 0.74);
+  --mr-diagrammlinie: rgba(255, 238, 222, 0.07);
+}
+
+:root[data-flaechen="kesselraum"][data-theme="hell"] {
+  --mr-grund: #ece6e0;
+  --mr-leiste: #f6f2ee;
+  --mr-flaeche: #faf7f4;
+  --mr-karte: #ffffff;
+  --mr-karte-2: #ede6df;
+  --mr-karte-3: #e0d6cc;
+  --mr-mulde: #d9cec3;
+  --mr-text: #241c16;
+  --mr-text-2: #5a4a3e;
+  --mr-text-3: #7c6a5c;
+  --mr-rand: rgba(46, 32, 22, 0.1);
+  --mr-rand-stark: rgba(46, 32, 22, 0.2);
+  --mr-diagrammlinie: rgba(46, 32, 22, 0.09);
+}

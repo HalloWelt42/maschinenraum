@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from . import __version__, nachbar
-from .konfig import Ladefehler, Ordner
+from .konfig import Einstellungen, Ladefehler, Ordner
 from .leitstelle import Leitstellenkanal, LeitstellenStand
 from .messen import Messer
 from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Faehigkeit, Messwerte, Prozesszustand
@@ -59,6 +59,7 @@ class Stand(BaseModel):
     rechner: str
     zeit: float
     ordner: str
+    einstellungen: Einstellungen      # ohne Geheimnisse; der Schlüssel liegt in einer eigenen Datei
     messwerte: Messwerte | None
     dienste: list[DienstAnsicht]
     ladefehler: list[Ladefehler]
@@ -126,6 +127,7 @@ class Laufzeit:
     def stand(self) -> Stand:
         e = self.verwalter.einstellungen
         return Stand(version=__version__, rechner=e.name or socket.gethostname().removesuffix(".local"), zeit=time.time(), ordner=str(self.ordner.wurzel),
+                     einstellungen=self.ordner.einstellungen(),
                      messwerte=self.messwerte, dienste=self.ansicht(), ladefehler=self.verwalter.ladefehler, leitstelle=self.kanal.stand, nachbar=self.nachbar)
 
 

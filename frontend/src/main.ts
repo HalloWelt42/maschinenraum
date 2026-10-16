@@ -8,6 +8,7 @@ import '@fontsource/chakra-petch/600.css';
 import '@fontsource/chakra-petch/700.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import './stil/stil.css';
+import './stil/farben.css';
 import './stil/app.css';
 import { mount } from 'svelte';
 import App from './App.svelte';

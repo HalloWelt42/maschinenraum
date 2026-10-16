@@ -1,8 +1,8 @@
-// Ansicht je Gerät: Thema und Schriftstufe, gemerkt im Browser. Blauart wie in der Leitstelle,
-// fest in index.html.
+// Ansicht je Gerät: Thema und Schriftstufe, gemerkt im Browser. Farbwelt, Blauart und Flächen (Kesselraum)
+// stehen fest in index.html.
 
 export type Thema = 'dunkel' | 'hell';
-export type Schrift = 'normal' | 'gross' | 'sehr-gross';
+export type Schrift = 'klein' | 'mittel' | 'gross';
 
 function lesen<T extends string>(schluessel: string, erlaubt: readonly T[], vorgabe: T): T {
   try {
@@ -23,7 +23,8 @@ function merken(schluessel: string, wert: string): void {
 
 class Ansicht {
   thema = $state<Thema>(lesen('thema', ['dunkel', 'hell'] as const, 'dunkel'));
-  schrift = $state<Schrift>(lesen('schrift', ['normal', 'gross', 'sehr-gross'] as const, 'normal'));
+  // Frühere Stufen (normal, sehr-gross) gelten als gross: das bisherige Normal ist jetzt die größte Stufe
+  schrift = $state<Schrift>(lesen('schrift', ['klein', 'mittel', 'gross'] as const, 'gross'));
 
   setzeThema(t: Thema): void {
     this.thema = t;

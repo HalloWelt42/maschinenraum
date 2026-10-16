@@ -24,11 +24,12 @@ export const ZUSTAND: Record<Prozesszustand, { wort: string; klasse: string; sym
   gestoert: { wort: 'Gestört', klasse: 'fehler', symbol: 'fa-triangle-exclamation' },
 };
 
-export const VERBINDUNG: Record<Verbindung, { wort: string; klasse: string }> = {
-  aus: { wort: 'Ohne Leitstelle', klasse: 'aus' },
-  ohne_schluessel: { wort: 'Schlüssel fehlt', klasse: 'auslaufend' },
-  verbindet: { wort: 'Verbindet', klasse: 'wartet' },
-  verbunden: { wort: 'Mit Leitstelle verbunden', klasse: 'fertig' },
-  abgewiesen: { wort: 'Von der Leitstelle abgewiesen', klasse: 'fehler' },
-  nicht_erreichbar: { wort: 'Leitstelle nicht erreichbar', klasse: 'auslaufend' },
+/** klasse: Zustandsmarke; lage: Klasse der Kopfanzeige (ruhig, angespannt, engpass wie in der Leitstelle) */
+export const VERBINDUNG: Record<Verbindung, { wort: string; klasse: string; lage: string }> = {
+  aus: { wort: 'Ohne Leitstelle', klasse: 'aus', lage: 'aus' },
+  ohne_schluessel: { wort: 'Schlüssel fehlt', klasse: 'auslaufend', lage: 'angespannt' },
+  verbindet: { wort: 'Verbindet', klasse: 'wartet', lage: 'angespannt' },
+  verbunden: { wort: 'Mit Leitstelle verbunden', klasse: 'fertig', lage: 'ruhig' },
+  abgewiesen: { wort: 'Von der Leitstelle abgewiesen', klasse: 'fehler', lage: 'engpass' },
+  nicht_erreichbar: { wort: 'Leitstelle nicht erreichbar', klasse: 'auslaufend', lage: 'angespannt' },
 };

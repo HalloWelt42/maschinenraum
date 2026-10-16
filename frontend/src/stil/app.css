@@ -1,38 +1,20 @@
 /*
- * Maschinenraum: Seitenaufbau. Fester Kopf oben, darunter ein Rollfeld; auf breiten Fenstern zwei Spalten
- * (Dienste links, Speicher und Verbindungen rechts), schmal untereinander. Keine seitliche Rollerei.
+ * Ergänzungen zu stil.css, gleich wie in der Oberfläche der Leitstelle: Seiteninhalt füllt den Rahmen (fester Kopf,
+ * eigenes Rollfeld), Ansicht unten in der Seitenleiste, Rückmeldungen, Formularfelder. Seitenstile stehen in den Seiten.
  */
 
-.mr-schale { height: 100%; display: flex; flex-direction: column; }
-.mr-kopf { flex: none; display: flex; align-items: center; gap: var(--mr-a4); height: var(--mr-kopf-hoehe); padding: 0 var(--mr-a5);
-           background: var(--mr-leiste); position: sticky; top: 0; z-index: 10; }
-.mr-kopf .marke { width: auto; }
-.mr-kopf .rechner { color: var(--mr-text-2); white-space: nowrap; }
-.mr-kopf .rechner i { color: var(--mr-text-3); margin-right: 4px; }
-.mr-kopf .kopf-aktionen { gap: var(--mr-a2); }
-.mr-kopf a.zustand { text-decoration: none; }
+/* Seiteninhalt füllt den Rahmen: fester Kopf, eigenes Rollfeld */
+.seiteninhalt { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.verbinden { flex: 1; display: grid; place-items: center; }
 
-.mr-rollfeld { flex: 1; min-height: 0; overflow-y: auto; padding: var(--mr-a5); display: flex; flex-direction: column; gap: var(--mr-a4); }
-.mr-raster { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: var(--mr-a5); align-items: start; max-width: 1500px; width: 100%; margin: 0 auto; }
-.mr-dienste { display: flex; flex-direction: column; gap: var(--mr-a3); min-width: 0; }
-.mr-dienste .seitenkopf { display: flex; align-items: baseline; gap: var(--mr-a3); }
-.mr-dienste .seitenkopf .zahl { color: var(--mr-text-3); font-size: var(--mr-gr-titel); }
-.mr-dienste .kennzahlen { margin-bottom: var(--mr-a2); }
-.mr-dienste .dienst { margin: 0; }
-.mr-seite { display: flex; flex-direction: column; gap: var(--mr-a3); min-width: 0; position: sticky; top: 0; }
-.mr-seite .karte { margin: 0; }
+/* Ansicht unten in der Seitenleiste */
+.seite .ansicht { margin-top: auto; display: flex; flex-direction: column; gap: var(--mr-a2); padding: var(--mr-a3) var(--mr-a1) 0; }
+.seite .ansicht .stufen button { flex: 1; padding: 0 6px; white-space: nowrap; font-size: var(--mr-gr-marke); min-width: 0; }
+.seite .ansicht .stufen { display: flex; }
+@media (max-width: 1240px) { .seite .ansicht { display: none; } }
 
-.liste { list-style: none; margin: 0 0 var(--mr-a2); padding: 0; display: grid; gap: 6px; font-size: var(--mr-gr-klein); }
-.liste li { display: flex; justify-content: space-between; gap: var(--mr-a3); }
-.liste li b { font-weight: 600; }
-
-/* Formularfelder: Bezeichnung oben, Feld darunter */
-.feld-l { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.feld-l > span { font-size: var(--mr-gr-klein); color: var(--mr-text-2); }
-.feld-l > span small { display: block; color: var(--mr-text-3); font-size: var(--mr-gr-marke); }
-
-/* Rückmeldungen gestapelt unten rechts */
-.rueckmeldungen { position: fixed; right: var(--mr-a5); bottom: var(--mr-a5); z-index: 40;
+/* Rückmeldungen gestapelt unten rechts, über der Fußleiste */
+.rueckmeldungen { position: fixed; right: var(--mr-a5); bottom: calc(var(--mr-fuss-hoehe) + var(--mr-a4)); z-index: 40;
                   display: flex; flex-direction: column; gap: var(--mr-a2); align-items: flex-end; pointer-events: none; }
 .rueckmeldungen .meldung { position: static; pointer-events: auto; max-width: 560px; }
 .rueckmeldungen .meldung.erfolg > i { color: var(--mr-erfolg); }
@@ -40,12 +22,19 @@
 .rueckmeldungen .meldung.fehler > i { color: var(--mr-gefahr); }
 .rueckmeldungen .meldung.hinweis > i { color: var(--mr-info); }
 
-@media (max-width: 1100px) {
-  .mr-raster { grid-template-columns: minmax(0, 1fr); }
-  .mr-seite { position: static; }
-}
-@media (max-width: 640px) {
-  .mr-kopf { padding: 0 var(--mr-a3); gap: var(--mr-a2); }
-  .mr-kopf .rechner, .mr-kopf a.zustand { display: none; }
-  .mr-rollfeld { padding: var(--mr-a3); }
-}
+/* Formularfelder: Bezeichnung oben, Feld darunter */
+.feld-l { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.feld-l > span { font-size: var(--mr-gr-klein); color: var(--mr-text-2); }
+.feld-l > span small { display: block; color: var(--mr-text-3); font-size: var(--mr-gr-marke); }
+.feld-l .eingabe { width: 100%; }
+
+/* Symbole in Knöpfen eines leeren Zustands behalten Knopfgröße */
+.leer .knopf i { font-size: inherit; color: inherit; }
+
+/* Hinweise oberhalb von Listen */
+.rollfeld > .hinweis { margin-bottom: var(--mr-a3); }
+
+/* Kleine Listen in Karten */
+.liste { list-style: none; margin: 0 0 var(--mr-a2); padding: 0; display: grid; gap: 6px; font-size: var(--mr-gr-klein); }
+.liste li { display: flex; justify-content: space-between; gap: var(--mr-a3); }
+.liste li b { font-weight: 600; }

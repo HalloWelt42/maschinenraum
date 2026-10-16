@@ -42,11 +42,110 @@ export interface Stand {
   rechner: string;
   zeit: number;
   ordner: string;
+  einstellungen: Einstellungen;
   messwerte: Messwerte | null;
   dienste: DienstAnsicht[];
   ladefehler: Ladefehler[];
   leitstelle: LeitstellenStand;
   nachbar: NachbarStand;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Einstellungen".
+ */
+export interface Einstellungen {
+  /**
+   * Anzeigename des Rechners; sonst der Rechnername
+   */
+  name: string | null;
+  oberflaeche: Oberflaeche;
+  leitstelle: Leitstelle;
+  durchleitung: Durchleitung;
+  messung: Messung;
+  neustart: Neustart;
+  nachbar: Nachbar;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Oberflaeche".
+ */
+export interface Oberflaeche {
+  /**
+   * nur dieser Rechner; 0.0.0.0 öffnet die Oberfläche fürs Netz
+   */
+  adresse: string;
+  port: number;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Leitstelle".
+ */
+export interface Leitstelle {
+  /**
+   * Basisadresse der Leitstelle, zum Beispiel http://leitstelle:8530; leer: ohne Leitstelle
+   */
+  adresse: string | null;
+  /**
+   * längste Pause zwischen Verbindungsversuchen
+   */
+  wiederverbindung_max_s: number;
+}
+/**
+ * Weg der Leitstelle zu den Diensten (wie bei einem Modell-Läufer); nur mit dem Schlüssel nutzbar.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Durchleitung".
+ */
+export interface Durchleitung {
+  /**
+   * im Netz erreichbar, damit die Leitstelle Anfragen durchreichen kann
+   */
+  adresse: string;
+  port: number;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Messung".
+ */
+export interface Messung {
+  /**
+   * Abstand der Messungen und der Dienstprüfung
+   */
+  takt_s: number;
+  /**
+   * Zusatzmessungen (Grafik, Temperatur, Leistung) über macmon, wenn vorhanden
+   */
+  macmon: boolean;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Neustart".
+ */
+export interface Neustart {
+  /**
+   * Pausen vor dem 1., 2., 3. Neustart nach einem Absturz
+   *
+   * @minItems 1
+   */
+  pausen_s: [number, ...number[]];
+  /**
+   * Zeitraum, in dem Abstürze gezählt werden
+   */
+  fenster_s: number;
+  /**
+   * mehr Abstürze im Zeitraum: der Dienst bleibt aus
+   */
+  im_fenster: number;
+}
+/**
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Nachbar".
+ */
+export interface Nachbar {
+  /**
+   * Modell-Läufer auf diesem Rechner, nur zur Anzeige; leer: keiner
+   */
+  modell_laeufer: string | null;
 }
 /**
  * `knoten.messwerte`: im Takt des Agenten.

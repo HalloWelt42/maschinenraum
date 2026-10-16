@@ -3,7 +3,7 @@
   import { onDestroy } from 'svelte';
   import { api } from '../lib/api';
 
-  let { kennung = null }: { kennung?: string | null } = $props();
+  let { kennung = null, zeilen: anzahl = 300 }: { kennung?: string | null; zeilen?: number } = $props();
 
   let zeilen = $state<string[]>([]);
   let datei = $state('');
@@ -14,7 +14,7 @@
     if (!laeuft) return;
     try {
       const unten = !feld || feld.scrollHeight - feld.scrollTop - feld.clientHeight < 40;
-      const p = kennung ? await api.protokoll(kennung) : await api.eigenesProtokoll();
+      const p = kennung ? await api.protokoll(kennung, anzahl) : await api.eigenesProtokoll(anzahl);
       zeilen = p.zeilen;
       datei = p.datei;
       if (unten) requestAnimationFrame(() => feld && (feld.scrollTop = feld.scrollHeight));
@@ -35,7 +35,7 @@
 
 <style>
   .protokoll { margin-top: var(--mr-a3); }
-  pre { margin: 0; max-height: 360px; overflow: auto; background: var(--mr-mulde); border-radius: var(--mr-ecke); padding: var(--mr-a3);
+  pre { margin: 0; max-height: var(--hoehe, 360px); overflow: auto; background: var(--mr-mulde); border-radius: var(--mr-ecke); padding: var(--mr-a3);
         font-family: var(--mr-schrift-code); font-size: 14px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--mr-text-2); }
   .datei { margin-top: 6px; font-family: var(--mr-schrift-code); font-size: var(--mr-gr-marke); color: var(--mr-text-3); overflow-wrap: anywhere; }
 </style>
