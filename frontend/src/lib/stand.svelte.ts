@@ -25,7 +25,8 @@ class Lage {
       this.zeitgeber = setTimeout(runde, TAKT_MS);
     };
     document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && this.jetzt());
-    void runde();
+    // Der erste Stand kommt immer, auch wenn die Seite im Hintergrund geöffnet wurde; danach nur, solange sichtbar
+    void this.jetzt().then(() => (this.zeitgeber = setTimeout(runde, TAKT_MS)));
   }
 }
 
