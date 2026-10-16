@@ -17,7 +17,9 @@ import re
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from enum import Enum
+
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from .protokoll import Faehigkeit
 
@@ -105,6 +107,11 @@ def toml_schreiben(e: Einstellungen) -> str:
 
 
 # ── Dienste ──────────────────────────────────────────────────────────────
+class Steuerung(str, Enum):
+    PROZESS = "prozess"    # der Befehl ist der Dienst: er läuft, bis er angehalten wird (eigene Prozessgruppe)
+    BEFEHLE = "befehle"    # der Befehl startet etwas und kehrt zurück (zum Beispiel Container); Prüfen und Anhalten per Befehl
+
+
 class DienstVorlage(BaseModel):
     """Eine Datei unter dienste/. Der Dienst läuft in eigener Sitzung (Prozessgruppe), eigenem Arbeitsordner, mit
     eigener Umgebung (nur Pfad, Heimordner, Sprache und was hier steht) und eigener Protokolldatei."""
@@ -127,6 +134,11 @@ class DienstVorlage(BaseModel):
     pfad: str = STANDARD_PFAD
     neustart: bool = Field(default=True, description="nach einem Absturz neu starten, solange er laufen soll")
     leitstelle_anhalten: bool = Field(default=True, description="die Leitstelle darf ihn anhalten, um Speicher freizumachen; nein: nur von Hand")
+    steuerung: Steuerung = Field(default=Steuerung.PROZESS)
+    pruefbefehl: list[str] = Field(default_factory=list, description="erreichbar heißt: dieser Befehl endet mit 0")
+    anhaltebefehl: list[str] = Field(default_factory=list, description="hält ihn an; dann nie per Signal (Pflicht bei steuerung = befehle)")
+    prozessmuster: str | None = Field(default=None, description="regulärer Ausdruck auf die Befehlszeile der Prozesse, deren Speicher zählt (für befehle)")
+    braucht: list[str] = Field(default_factory=list, description="Kennungen von Diensten, die vor diesem laufen müssen")
     aktiv_ab_prozent: float = Field(default=5.0, ge=0, description="ab dieser Prozessorlast (Prozent eines Kerns) gilt er als arbeitend")
 
     @field_validator("ordner", "umgebung_datei", mode="before")
@@ -140,6 +152,17 @@ class DienstVorlage(BaseModel):
         if not KENNUNG.match(wert):
             raise ValueError("Dateiname nur aus Kleinbuchstaben, Ziffern, - und _")
         return wert
+
+    @model_validator(mode="after")
+    def _steuerung_vollstaendig(self) -> DienstVorlage:
+        if self.steuerung == Steuerung.BEFEHLE:
+            if not self.anhaltebefehl:
+                raise ValueError("steuerung = befehle braucht einen anhaltebefehl")
+            if not (self.port or self.pruefadresse or self.pruefbefehl):
+                raise ValueError("steuerung = befehle braucht port, pruefadresse oder pruefbefehl, um zu sehen, ob er läuft")
+        if self.prozessmuster:
+            re.compile(self.prozessmuster)
+        return self
 
     def programm(self, umgebung: dict[str, str]) -> list[str]:
         """Befehl mit aufgelösten Variablen aus der Umgebung des Dienstes; ein relatives Programm gilt ab `ordner`."""
@@ -218,9 +241,21 @@ class Ordner:
             try:
                 with open(datei, "rb") as f:
                     vorlagen.append(DienstVorlage.model_validate({**tomllib.load(f), "kennung": datei.stem}))
-            except (OSError, tomllib.TOMLDecodeError, ValidationError) as e:
+            except ValidationError as e:
+                fehler.append(Ladefehler(datei=datei.name, meldung=_lesbar(e)))
+            except (OSError, tomllib.TOMLDecodeError) as e:
                 fehler.append(Ladefehler(datei=datei.name, meldung=str(e).splitlines()[0][:200]))
         return vorlagen, fehler
+
+
+def _lesbar(e: ValidationError) -> str:
+    """Feld und Grund statt der Sammelzeile "1 validation error"."""
+    teile = []
+    for f in e.errors()[:3]:
+        feld = ".".join(str(x) for x in f["loc"])
+        grund = str(f["msg"]).removeprefix("Value error, ")
+        teile.append(f"{feld}: {grund}" if feld else grund)
+    return "; ".join(teile)[:300]
 
 
 def erweitern(text: str, umgebung: dict[str, str]) -> str:

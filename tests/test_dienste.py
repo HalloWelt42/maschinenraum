@@ -259,3 +259,18 @@ def test_rechenzeit_aus_ps():
     assert rechenzeit("12:03.00") == 723.0
     assert rechenzeit("1:00:00") == 3600.0
     assert rechenzeit("2-01:00:00") == 2 * 86400 + 3600.0
+
+
+async def test_programm_ohne_faehigkeit_gehoert_nicht_der_leitstelle(tmp_path: Path):
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, port)
+    datei = tmp_path / "dienste" / "probe.toml"
+    datei.write_text(datei.read_text().replace('faehigkeiten = ["stimme"]', 'faehigkeiten = []'))
+    v = verwalter(o)
+    await v.runde()
+    assert [b.kennung for b in v.liste().dienste] == ["probe"]
+    assert v.liste(nur_leitstelle=True).dienste == []
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"), von_leitstelle=True)
+    assert not e.erfolg and "kein Dienst der Leitstelle" in e.meldung and not offen(port)
+    assert (await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"))).erfolg      # hier von Hand
+    await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe"))

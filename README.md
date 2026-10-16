@@ -77,7 +77,22 @@ Beispiel: [beispiele/bildwerkstatt.toml](beispiele/bildwerkstatt.toml).
 | `neustart` | ja | nach einem Absturz neu starten, solange der Dienst laufen soll |
 | `leitstelle_anhalten` | ja | die Leitstelle darf ihn anhalten, wenn ein Modell den Speicher braucht und er nicht arbeitet; nein: nur hier von Hand |
 | `aktiv_ab_prozent` | 5 | ab dieser Prozessorlast (Prozent eines Kerns) gilt er als arbeitend; arbeitende Dienste hält die Leitstelle nicht an |
+| `steuerung` | prozess | `prozess`: der Befehl ist der Dienst und läuft, bis er angehalten wird. `befehle`: der Befehl startet etwas und kehrt zurück (zum Beispiel Container) |
+| `pruefbefehl` | keiner | erreichbar heißt: dieser Befehl endet mit 0 (zum Beispiel `docker info`) |
+| `anhaltebefehl` | keiner | hält den Dienst mit einem Befehl an statt per Signal; Pflicht bei `befehle` |
+| `prozessmuster` | keines | regulärer Ausdruck auf die Befehlszeile der Prozesse, deren Speicher zählt (bei `befehle`) |
+| `braucht` | leer | Kennungen von Diensten, die vorher laufen müssen; sie werden mitgestartet |
 
+
+## Dienste und Programme
+
+Was eine Fähigkeit hat (`faehigkeiten` nicht leer), ist ein **Dienst**: Die Leitstelle sieht ihn, kann ihn starten,
+anhalten und Anfragen über die Durchleitung an ihn richten. Alles ohne Fähigkeit ist ein **Programm** (Oberflächen,
+Backends von Anwendungen, Abholer, Datenbanken, Docker): Der Maschinenraum verwaltet es genauso, die Leitstelle sieht
+und schaltet es aber nicht. Sie vermittelt nur Fähigkeiten; sie lädt selbst nie ein Modell.
+
+Container laufen als `steuerung = "befehle"` mit `braucht = ["docker"]`, mit genau dem Compose-Aufruf, den das Projekt
+selbst nutzt (Umgebungsdatei, Projektname); sonst entstünde ein zweites Projekt mit leerem Datenbestand.
 
 ## Abgrenzung je Dienst
 

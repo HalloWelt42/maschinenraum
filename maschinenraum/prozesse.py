@@ -30,7 +30,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .konfig import DienstVorlage, Einstellungen, Ladefehler, Ordner, erweitern, umgebung_lesen
+from .konfig import DienstVorlage, Einstellungen, Ladefehler, Ordner, Steuerung, erweitern, umgebung_lesen
 from .messen import GIB, MAC, Prozesstabelle, lauschender_prozess, prozess_bytes
 from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Dienstliste, ProzessBericht, Prozesszustand
 
@@ -111,6 +111,12 @@ class Prozessdienst:
     # ── Beobachten ───────────────────────────────────────────────────────
     def erreichbar(self) -> bool:
         v = self.vorlage
+        if v.pruefbefehl:
+            try:
+                return subprocess.run([erweitern(t, self._umgebung()) for t in v.pruefbefehl], cwd=v.ordner, env=self._umgebung(),
+                                      stdin=subprocess.DEVNULL, capture_output=True, timeout=15).returncode == 0
+            except (OSError, subprocess.SubprocessError):
+                return False
         if v.pruefadresse:
             try:
                 with urllib.request.urlopen(v.pruefadresse, timeout=2) as antwort:
@@ -134,6 +140,8 @@ class Prozessdienst:
     def pruefen(self, tabelle: Prozesstabelle) -> str | None:
         """Stand aus der Prozesstabelle und der Erreichbarkeit. Rückgabe: Absturzmeldung, wenn eine eigene Gruppe
         unerwartet endete."""
+        if self.vorlage.steuerung == Steuerung.BEFEHLE:
+            return self._pruefen_befehle(tabelle)
         if self.prozess and self.prozess.poll() is not None:
             code, self.prozess = self.prozess.returncode, None
         else:
@@ -169,6 +177,30 @@ class Prozessdienst:
             self.zustand = Prozesszustand.AUS
         return None
 
+    def _pruefen_befehle(self, tabelle: Prozesstabelle) -> None:
+        """Befehlsdienst: er läuft, wenn die Prüfung gelingt; gemessen wird, was zum Prozessmuster passt."""
+        if self.erreichbar():
+            if self.zustand != Prozesszustand.LAEUFT:
+                self.zustand, self.meldung = Prozesszustand.LAEUFT, ""
+            self._messen(tabelle.passend(self.vorlage.prozessmuster) if self.vorlage.prozessmuster else [], tabelle)
+        else:
+            if self.zustand == Prozesszustand.LAEUFT:
+                self.meldung = "läuft nicht mehr"
+            if self.zustand != Prozesszustand.GESTOERT:
+                self.zustand = Prozesszustand.AUS
+            self._messen([], tabelle)
+        return None
+
+    def _befehl_ausfuehren(self, befehl: list[str], grenze_s: float) -> None:
+        """Einmaliger Befehl (Start oder Anhalten eines Befehlsdienstes), Ausgabe ins Protokoll des Dienstes, in eigener
+        Sitzung, damit nichts davon an der Prozessgruppe des Maschinenraums hängt."""
+        env = self._umgebung()
+        with self._protokoll_oeffnen() as aus:
+            aus.write(f"\n--- {' '.join(befehl)} ({time.strftime('%Y-%m-%d %H:%M:%S')}) ---\n".encode())
+            aus.flush()
+            subprocess.run([erweitern(t, env) for t in befehl], cwd=self.vorlage.ordner, env=env, stdin=subprocess.DEVNULL, stdout=aus,
+                           stderr=subprocess.STDOUT, timeout=grenze_s, check=True, start_new_session=True)
+
     def _messen(self, pids: list[int], tabelle: Prozesstabelle) -> None:
         """Speicher und Prozessorlast der Prozesse des Dienstes; ohne Prozesse ist beides leer."""
         if not pids:
@@ -179,6 +211,12 @@ class Prozessdienst:
         if self._rechenzeit and jetzt > self._rechenzeit[0]:
             self.cpu_prozent = round(max(0.0, summe - self._rechenzeit[1]) / (jetzt - self._rechenzeit[0]) * 100, 1)
         self._rechenzeit = (jetzt, summe)
+
+    @property
+    def fuer_leitstelle(self) -> bool:
+        """Die Leitstelle vermittelt nur Fähigkeiten. Programme ohne Fähigkeit (Oberflächen, Backends von Anwendungen,
+        Abholer) verwaltet nur der Maschinenraum; die Leitstelle sieht und schaltet sie nicht."""
+        return bool(self.vorlage.faehigkeiten)
 
     @property
     def aktiv(self) -> bool:
@@ -250,6 +288,8 @@ class Prozessdienst:
             if not self.vorlage.ordner.is_dir():
                 return self._gestoert(f"Arbeitsordner fehlt: {self.vorlage.ordner}")
             self.zustand, self.meldung = Prozesszustand.STARTET, ""
+            if self.vorlage.steuerung == Steuerung.BEFEHLE:
+                return await self._starten_befehle()
             try:
                 await asyncio.to_thread(self._ausfuehren)
             except subprocess.CalledProcessError as f:
@@ -257,6 +297,23 @@ class Prozessdienst:
             except (OSError, subprocess.SubprocessError) as f:
                 return self._gestoert(f"Start scheiterte: {f}")
             return await self._warten_bis_erreichbar()
+
+    async def _starten_befehle(self) -> tuple[bool, str]:
+        v = self.vorlage
+        beginn = time.monotonic()
+        try:
+            await asyncio.to_thread(self._vorher, self._umgebung())
+            await asyncio.to_thread(self._befehl_ausfuehren, v.befehl, v.startzeit_s)
+        except subprocess.CalledProcessError as f:
+            return self._gestoert(f"Startbefehl endete mit Code {f.returncode}{self._letzte_zeile()}")
+        except (OSError, subprocess.SubprocessError) as f:
+            return self._gestoert(f"Startbefehl scheiterte: {f}")
+        while time.monotonic() - beginn < v.startzeit_s:
+            if await asyncio.to_thread(self.erreichbar):
+                self.zustand, self.meldung = Prozesszustand.LAEUFT, ""
+                return True, f"gestartet in {time.monotonic() - beginn:.1f} s"
+            await asyncio.sleep(1.0)
+        return self._gestoert(f"nach {v.startzeit_s:.0f} s nicht erreichbar{self._letzte_zeile()}")
 
     async def _warten_bis_erreichbar(self) -> tuple[bool, str]:
         beginn = time.monotonic()
@@ -284,6 +341,8 @@ class Prozessdienst:
     async def anhalten(self) -> tuple[bool, str]:
         async with self.sperre:
             self.neustart_um = None
+            if self.vorlage.anhaltebefehl and (self.vorlage.steuerung == Steuerung.BEFEHLE or self.fremd_pid):
+                return await self._anhalten_befehl()
             if self.stand.gruppe is not None:
                 self.zustand = Prozesszustand.STOPPT
                 hart = await self._gruppe_beenden()
@@ -295,6 +354,24 @@ class Prozessdienst:
                 return True, "war schon aus"
             self.zustand, self.gb, self.fremd_pid, self.meldung = Prozesszustand.AUS, None, None, ""
             return True, "hart beendet" if hart else "beendet"
+
+    async def _anhalten_befehl(self) -> tuple[bool, str]:
+        """Anhalten mit dem eigenen Befehl, nie per Signal: bei Containern träfe ein Signal sonst die Portweiterleitung."""
+        if not await asyncio.to_thread(self.erreichbar):
+            self.zustand = Prozesszustand.AUS
+            return True, "war schon aus"
+        self.zustand = Prozesszustand.STOPPT
+        try:
+            await asyncio.to_thread(self._befehl_ausfuehren, self.vorlage.anhaltebefehl, self.vorlage.anhaltezeit_s)
+        except (OSError, subprocess.SubprocessError) as f:
+            return self._gestoert(f"Anhaltebefehl scheiterte: {f}{self._letzte_zeile()}")
+        beginn = time.monotonic()
+        while time.monotonic() - beginn < self.vorlage.anhaltezeit_s:
+            if not await asyncio.to_thread(self.erreichbar):
+                self.zustand, self.gb, self.fremd_pid, self.meldung = Prozesszustand.AUS, None, None, ""
+                return True, "beendet"
+            await asyncio.sleep(1.0)
+        return self._gestoert(f"läuft nach dem Anhaltebefehl noch ({self.vorlage.anhaltezeit_s:.0f} s gewartet)")
 
     async def _gruppe_beenden(self) -> bool:
         g = self.stand.gruppe
@@ -437,8 +514,23 @@ class Verwalter:
         d.neustart_um = jetzt + pause
         d.meldung += f"; Neustart in {pause:.0f} s"
 
+    async def _mit_abhaengigkeiten(self, d: Prozessdienst, kette: tuple[str, ...] = ()) -> tuple[bool, str]:
+        """Erst starten, was der Dienst braucht (der Reihe nach, ohne Kreise), dann ihn selbst."""
+        for k in d.vorlage.braucht:
+            vor = self.dienste.get(k)
+            if vor is None:
+                return d._gestoert(f"braucht {k}, den es hier nicht gibt")
+            if k in kette or k == d.kennung:
+                return d._gestoert(f"Abhängigkeiten im Kreis: {' -> '.join((*kette, d.kennung, k))}")
+            if vor.zustand != Prozesszustand.LAEUFT:
+                vor.stand.soll = Soll.LAEUFT
+                ok, meldung = await self._mit_abhaengigkeiten(vor, (*kette, d.kennung))
+                if not ok:
+                    return d._gestoert(f"{vor.vorlage.name} startet nicht: {meldung}")
+        return await d.starten()
+
     async def _neustarten(self, d: Prozessdienst) -> None:
-        ok, meldung = await d.starten()
+        ok, meldung = await self._mit_abhaengigkeiten(d)
         log.info("%s: Neustart %s (%s)", d.vorlage.name, "gelungen" if ok else "gescheitert", meldung)
         self.aenderung.set()
 
@@ -464,13 +556,15 @@ class Verwalter:
         d = self.dienste.get(b.ziel)
         if d is None:
             return BefehlErgebnis(befehl=b.befehl, ziel=b.ziel, erfolg=False, meldung=f"unbekannter Dienst {b.ziel}")
+        if von_leitstelle and not d.fuer_leitstelle:
+            return BefehlErgebnis(befehl=b.befehl, ziel=b.ziel, erfolg=False, meldung="kein Dienst der Leitstelle (ohne Fähigkeit, nur hier verwaltet)")
         if von_leitstelle and b.befehl == Befehlsart.DIENST_ANHALTEN and not d.vorlage.leitstelle_anhalten:
             log.info("Leitstelle wollte %s anhalten; laut Dienstdatei nur von Hand", d.vorlage.name)
             return BefehlErgebnis(befehl=b.befehl, ziel=b.ziel, erfolg=False, meldung="Anhalten nur von Hand (Dienstdatei: leitstelle_anhalten = false)")
         if b.befehl == Befehlsart.DIENST_STARTEN:
             d.stand.soll = Soll.LAEUFT
             d.abstuerze.clear()
-            ok, meldung = await d.starten()
+            ok, meldung = await self._mit_abhaengigkeiten(d)
         else:
             d.stand.soll = Soll.AUS
             ok, meldung = await d.anhalten()
@@ -486,8 +580,9 @@ class Verwalter:
             return aus
         return await self.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel=kennung))
 
-    def liste(self) -> Dienstliste:
-        return Dienstliste(dienste=[d.bericht() for d in self.dienste.values()])
+    def liste(self, nur_leitstelle: bool = False) -> Dienstliste:
+        """Alle Dienste; für die Leitstelle nur die mit Fähigkeiten (sie vermittelt Fähigkeiten, sonst nichts)."""
+        return Dienstliste(dienste=[d.bericht() for d in self.dienste.values() if d.fuer_leitstelle or not nur_leitstelle])
 
     async def beenden(self) -> None:
         for t in list(self._aufgaben):

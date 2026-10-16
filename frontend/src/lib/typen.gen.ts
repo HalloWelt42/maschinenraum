@@ -185,6 +185,7 @@ export interface DienstAnsicht {
   aktiv: boolean;
   cpu_prozent: number | null;
   anhalten_erlaubt: boolean;
+  fuer_leitstelle: boolean;
   soll: Soll | null;
   meldung: string;
   datei: string;

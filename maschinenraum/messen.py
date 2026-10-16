@@ -241,16 +241,22 @@ class Prozesstabelle:
         self.eltern: dict[int, int] = {}
         self.gruppe: dict[int, int] = {}
         self.rechenzeit_s: dict[int, float] = {}      # verbrauchte Prozessorzeit seit Prozessstart
-        for pid, ppid, pgid, zustand, sekunden in (self._ps() if MAC else self._proc()):
+        self.befehlszeile: dict[int, str] = {}
+        for pid, ppid, pgid, zustand, sekunden, zeile in (self._ps() if MAC else self._proc()):
             if not zustand.startswith("Z"):
-                self.eltern[pid], self.gruppe[pid], self.rechenzeit_s[pid] = ppid, pgid, sekunden
+                self.eltern[pid], self.gruppe[pid], self.rechenzeit_s[pid], self.befehlszeile[pid] = ppid, pgid, sekunden, zeile
+
+    def passend(self, muster: str) -> list[int]:
+        """Prozesse, deren Befehlszeile zum Muster passt."""
+        m = re.compile(muster)
+        return [p for p, z in self.befehlszeile.items() if m.search(z)]
 
     @staticmethod
     def _ps():
-        for zeile in _befehl("ps", "-A", "-o", "pid=,ppid=,pgid=,stat=,time=").splitlines():
-            teile = zeile.split()
-            if len(teile) == 5:
-                yield int(teile[0]), int(teile[1]), int(teile[2]), teile[3], rechenzeit(teile[4])
+        for zeile in _befehl("ps", "-A", "-o", "pid=,ppid=,pgid=,stat=,time=,command=").splitlines():
+            teile = zeile.split(None, 5)
+            if len(teile) >= 5:
+                yield int(teile[0]), int(teile[1]), int(teile[2]), teile[3], rechenzeit(teile[4]), teile[5] if len(teile) > 5 else ""
 
     @staticmethod
     def _proc():
@@ -261,7 +267,8 @@ class Prozesstabelle:
                 continue
             try:
                 rest = (eintrag / "stat").read_text().rsplit(")", 1)[1].split()
-                yield int(eintrag.name), int(rest[1]), int(rest[2]), rest[0], (int(rest[11]) + int(rest[12])) / takt
+                zeile = (eintrag / "cmdline").read_bytes().replace(b"\0", b" ").decode("utf-8", "replace").strip()
+                yield int(eintrag.name), int(rest[1]), int(rest[2]), rest[0], (int(rest[11]) + int(rest[12])) / takt, zeile
             except (OSError, IndexError, ValueError):
                 continue
 

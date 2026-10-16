@@ -26,7 +26,7 @@
             <tr><td><span class="farbe" style="background:{dienstfarbe(d.faehigkeiten)}"></span>{d.name}</td><td class="leise">Maschinenraum</td>
               <td><span class="zustand {ZUSTAND[d.zustand].klasse}">{ZUSTAND[d.zustand].wort}</span>{#if d.aktiv}<span class="arbeitet"> arbeitet</span>{/if}</td>
               <td class="r zahl">{d.gb_jetzt != null ? gb(d.gb_jetzt) : '-'}</td><td class="r zahl">{gb(d.bedarf_gb)}</td>
-              <td class="leise">{d.anhalten_erlaubt ? 'darf anhalten' : 'nur von Hand'}</td></tr>
+              <td class="leise">{!d.fuer_leitstelle ? 'nur hier verwaltet' : d.anhalten_erlaubt ? 'darf anhalten' : 'nur von Hand'}</td></tr>
           {/each}
           {#each s.nachbar.modelle as m (m.name)}
             <tr><td><span class="farbe laeufer"></span>{m.name}</td><td class="leise">Modell-Läufer</td><td><span class="zustand fertig">Geladen</span></td>

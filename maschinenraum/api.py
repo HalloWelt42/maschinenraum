@@ -47,6 +47,7 @@ class DienstAnsicht(BaseModel):
     aktiv: bool
     cpu_prozent: float | None
     anhalten_erlaubt: bool
+    fuer_leitstelle: bool           # nur Dienste mit Fähigkeiten sieht und schaltet die Leitstelle
     soll: Soll | None
     meldung: str
     datei: str
@@ -118,7 +119,7 @@ class Laufzeit:
             ergebnis.append(DienstAnsicht(kennung=b.kennung, name=b.name, beschreibung=v.beschreibung, faehigkeiten=sorted(b.faehigkeiten, key=lambda f: f.value),
                                           port=b.port, oberflaeche=v.oberflaeche, zustand=b.zustand, fremd=b.fremd, gb_jetzt=b.gb_jetzt,
                                           bedarf_gb=b.bedarf_gb, spitze_gb=d.stand.spitze_gb, schaetzung_gb=v.speicher_gb, aktiv=b.aktiv,
-                                          cpu_prozent=d.cpu_prozent if b.gb_jetzt is not None else None, anhalten_erlaubt=b.anhalten_erlaubt,
+                                          cpu_prozent=d.cpu_prozent if b.gb_jetzt is not None else None, anhalten_erlaubt=b.anhalten_erlaubt, fuer_leitstelle=d.fuer_leitstelle,
                                           soll=d.stand.soll, meldung=b.meldung,
                                           datei=str(self.ordner.dienste_ordner / f"{b.kennung}.toml"), protokolldatei=str(d._protokolldatei()),
                                           ordner=str(v.ordner)))

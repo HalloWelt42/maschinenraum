@@ -60,8 +60,8 @@ def erstellen(laufzeit) -> FastAPI:
         if not berechtigt(request):
             return _absage(401, "unbekannter_schluessel", "Nur die Leitstelle mit dem Schlüssel dieses Maschinenraums.")
         d = laufzeit.verwalter.dienste.get(dienst)
-        if d is None:
-            return _absage(404, "unbekannt", f"Diesen Dienst gibt es hier nicht: {dienst}")
+        if d is None or not d.fuer_leitstelle:
+            return _absage(404, "unbekannt", f"Diesen Dienst gibt es hier für die Leitstelle nicht: {dienst}")
         if d.vorlage.port is None:
             return _absage(409, "ohne_port", f"{d.vorlage.name} hat keinen Port, an den man Anfragen richten kann.")
         if d.zustand != Prozesszustand.LAEUFT:

@@ -47,8 +47,12 @@
     {#if d.port}<span class="zahl" title="Port, auf dem der Dienst antwortet">Port {d.port}</span>{/if}
     {#if d.soll === 'laeuft'}<span title="Läuft nach einem Neustart des Rechners wieder an"><i class="fa-solid fa-rotate"></i> startet mit dem Rechner</span>{/if}
     {#if d.aktiv}<span class="arbeitet" title="Prozessorlast {d.cpu_prozent} Prozent eines Kerns: der Dienst arbeitet gerade"><i class="fa-solid fa-gear fa-spin"></i> arbeitet</span>{/if}
-    <span title={d.anhalten_erlaubt ? 'Die Leitstelle darf ihn anhalten, wenn ein Modell den Speicher braucht und er nicht arbeitet' : 'Die Leitstelle darf ihn nicht anhalten; nur von Hand (Dienstdatei: leitstelle_anhalten = false)'}>
-      <i class="fa-solid {d.anhalten_erlaubt ? 'fa-tower-broadcast' : 'fa-lock'}"></i> {d.anhalten_erlaubt ? 'Leitstelle darf anhalten' : 'nur von Hand anhalten'}</span>
+    {#if !d.fuer_leitstelle}
+      <span title="Programm ohne Fähigkeit (Oberfläche, Backend einer Anwendung, Abholer): nur hier verwaltet, die Leitstelle sieht und schaltet es nicht"><i class="fa-solid fa-house"></i> nur hier verwaltet</span>
+    {:else}
+      <span title={d.anhalten_erlaubt ? 'Die Leitstelle darf ihn anhalten, wenn ein Modell den Speicher braucht und er nicht arbeitet' : 'Die Leitstelle darf ihn nicht anhalten; nur von Hand (Dienstdatei: leitstelle_anhalten = false)'}>
+        <i class="fa-solid {d.anhalten_erlaubt ? 'fa-tower-broadcast' : 'fa-lock'}"></i> {d.anhalten_erlaubt ? 'Leitstelle darf anhalten' : 'nur von Hand anhalten'}</span>
+    {/if}
   </div>
   {#if d.beschreibung}<p class="beschreibung">{d.beschreibung}</p>{/if}
 
