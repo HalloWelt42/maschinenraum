@@ -13,12 +13,12 @@ import logging
 from contextlib import asynccontextmanager
 
 import httpx
+from dienstkern.zustand import Zustand
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
 from . import __version__
-from .protokoll import Prozesszustand
 
 log = logging.getLogger("maschinenraum")
 # Köpfe, die nur für eine Verbindung gelten oder die die Durchleitung selbst setzt
@@ -60,11 +60,11 @@ def erstellen(laufzeit) -> FastAPI:
         if not berechtigt(request):
             return _absage(401, "unbekannter_schluessel", "Nur die Leitstelle mit dem Schlüssel dieses Maschinenraums.")
         d = laufzeit.verwalter.dienste.get(dienst)
-        if d is None or not d.fuer_leitstelle:
+        if d is None:
             return _absage(404, "unbekannt", f"Diesen Dienst gibt es hier für die Leitstelle nicht: {dienst}")
         if d.vorlage.port is None:
             return _absage(409, "ohne_port", f"{d.vorlage.name} hat keinen Port, an den man Anfragen richten kann.")
-        if d.zustand != Prozesszustand.LAEUFT:
+        if d.zustand != Zustand.LAEUFT:
             return _absage(409, "dienst_aus", f"{d.vorlage.name} läuft nicht ({d.zustand.value}).")
         kopf = {k: v for k, v in request.headers.items() if k.lower() not in OHNE_KOPF}
         ziel = httpx.URL(f"http://127.0.0.1:{d.vorlage.port}/{pfad}", query=request.url.query.encode())

@@ -73,7 +73,7 @@ export interface Einstellungen {
   leitstelle: Leitstelle;
   durchleitung: Durchleitung;
   messung: Messung;
-  neustart: Neustart;
+  neustart: Neustartregeln;
   nachbar: Nachbar;
 }
 /**
@@ -130,9 +130,9 @@ export interface Messung {
 }
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
- * via the `definition` "Neustart".
+ * via the `definition` "Neustartregeln".
  */
-export interface Neustart {
+export interface Neustartregeln {
   /**
    * Pausen vor dem 1., 2., 3. Neustart nach einem Absturz
    *
@@ -196,7 +196,6 @@ export interface DienstAnsicht {
   aktiv: boolean;
   cpu_prozent: number | null;
   anhalten_erlaubt: boolean;
-  fuer_leitstelle: boolean;
   soll: Soll | null;
   meldung: string;
   datei: string;

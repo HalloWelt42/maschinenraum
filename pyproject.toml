@@ -1,9 +1,10 @@
 [project]
 name = "maschinenraum"
-description = "Maschinenraum: verwaltet die Dienste eines Rechners an einem Ort, mit Oberfläche und optionaler Anbindung an die Leitstelle"
+description = "Maschinenraum: verwaltet die KI-Dienste eines Rechners an einem Ort, mit Oberfläche und Anbindung an die Leitstelle"
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
+  "dienstkern @ https://github.com/HalloWelt42/dienstkern/archive/refs/heads/main.tar.gz",
   "pydantic>=2.7",
   "websockets>=13",
   "fastapi>=0.115",

@@ -1,7 +1,7 @@
 """Lokale Schnittstelle und Oberfläche des Maschinenraums.
 
-Standardmäßig nur auf diesem Rechner erreichbar (127.0.0.1). Schutz gegen fremde Webseiten im selben Browser:
-nur bekannte Rechnernamen im Host-Kopf (gegen DNS-Rebinding) und schreibende Aufrufe nur mit dem Kopf
+Standardmäßig nur auf diesem Rechner erreichbar (127.0.0.1). Schutz gegen fremde Webseiten im selben Browser (aus dem
+Dienstkern): nur bekannte Rechnernamen im Host-Kopf (gegen DNS-Rebinding) und schreibende Aufrufe nur mit dem Kopf
 `X-Maschinenraum: 1` (den ein fremder Ursprung ohne Freigabe nicht setzen darf).
 """
 
@@ -14,21 +14,20 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from dienstkern.vorlage import Ladefehler
+from dienstkern.web import Protokollauszug, oberflaeche_ausliefern, protokoll_ende, schutz_einrichten
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from . import __version__, nachbar
-from .konfig import Einstellungen, Ladefehler, Ordner
+from .konfig import Einstellungen, Ordner
 from .leitstelle import Leitstellenkanal, LeitstellenStand
 from .messen import Messer
 from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Faehigkeit, Messwerte, Prozesszustand
-from .prozesse import Soll, Verwalter
+from .prozesse import Soll, Verwalter, bericht
 
 log = logging.getLogger("maschinenraum")
 OBERFLAECHE = Path(__file__).resolve().parent / "oberflaeche"
-LOKALE_NAMEN = {"127.0.0.1", "localhost", "[::1]"}
-PROTOKOLL_LESEN_BYTES = 256 * 1024
 
 
 class DienstAnsicht(BaseModel):
@@ -47,7 +46,6 @@ class DienstAnsicht(BaseModel):
     aktiv: bool
     cpu_prozent: float | None
     anhalten_erlaubt: bool
-    fuer_leitstelle: bool           # nur Dienste mit Fähigkeiten sieht und schaltet die Leitstelle
     soll: Soll | None
     meldung: str
     datei: str
@@ -71,11 +69,6 @@ class Stand(BaseModel):
 class LeitstellenDaten(BaseModel):
     adresse: str | None = Field(default=None, max_length=255, description="leer: ohne Leitstelle")
     schluessel: str | None = Field(default=None, max_length=200, description="None: unverändert; leer: entfernen")
-
-
-class Protokollauszug(BaseModel):
-    datei: str
-    zeilen: list[str]
 
 
 class Laufzeit:
@@ -115,13 +108,12 @@ class Laufzeit:
     def ansicht(self) -> list[DienstAnsicht]:
         ergebnis = []
         for d in self.verwalter.dienste.values():
-            b, v = d.bericht(), d.vorlage
+            b, k, v = bericht(d), d.bericht(), d.vorlage
             ergebnis.append(DienstAnsicht(kennung=b.kennung, name=b.name, beschreibung=v.beschreibung, faehigkeiten=sorted(b.faehigkeiten, key=lambda f: f.value),
                                           port=b.port, oberflaeche=v.oberflaeche, zustand=b.zustand, fremd=b.fremd, gb_jetzt=b.gb_jetzt,
-                                          bedarf_gb=b.bedarf_gb, spitze_gb=d.stand.spitze_gb, schaetzung_gb=v.speicher_gb, aktiv=b.aktiv,
-                                          cpu_prozent=d.cpu_prozent if b.gb_jetzt is not None else None, anhalten_erlaubt=b.anhalten_erlaubt, fuer_leitstelle=d.fuer_leitstelle,
-                                          soll=d.stand.soll, meldung=b.meldung,
-                                          datei=str(self.ordner.dienste_ordner / f"{b.kennung}.toml"), protokolldatei=str(d._protokolldatei()),
+                                          bedarf_gb=b.bedarf_gb, spitze_gb=k.spitze_gb, schaetzung_gb=v.speicher_gb, aktiv=b.aktiv,
+                                          cpu_prozent=k.cpu_prozent, anhalten_erlaubt=b.anhalten_erlaubt, soll=k.soll, meldung=b.meldung,
+                                          datei=str(self.ordner.dienste_ordner / f"{b.kennung}.toml"), protokolldatei=str(d.protokolldatei()),
                                           ordner=str(v.ordner)))
         return ergebnis
 
@@ -130,18 +122,6 @@ class Laufzeit:
         return Stand(version=__version__, rechner=e.name or socket.gethostname().removesuffix(".local"), zeit=time.time(), ordner=str(self.ordner.wurzel),
                      einstellungen=self.ordner.einstellungen(),
                      messwerte=self.messwerte, dienste=self.ansicht(), ladefehler=self.verwalter.ladefehler, leitstelle=self.kanal.stand, nachbar=self.nachbar)
-
-
-def _protokoll_ende(datei: Path, zeilen: int) -> list[str]:
-    try:
-        with open(datei, "rb") as f:
-            f.seek(0, 2)
-            groesse = f.tell()
-            f.seek(max(0, groesse - PROTOKOLL_LESEN_BYTES))
-            text = f.read().decode("utf-8", errors="replace")
-    except FileNotFoundError:
-        return []
-    return text.splitlines()[-zeilen:]
 
 
 def erstellen(ordner: Ordner) -> FastAPI:
@@ -160,15 +140,7 @@ def erstellen(ordner: Ordner) -> FastAPI:
     app = FastAPI(title="Maschinenraum", version=__version__, lifespan=lebenslauf)
     app.state.laufzeit = lz
 
-    @app.middleware("http")
-    async def schutz(request: Request, weiter):
-        e = lz.verwalter.einstellungen.oberflaeche
-        host = (request.headers.get("host") or "").rsplit(":", 1)[0]
-        if e.adresse in ("127.0.0.1", "::1", "localhost") and host not in LOKALE_NAMEN:
-            return JSONResponse({"grund": "herkunft_nicht_erlaubt", "meldung": "Nur auf diesem Rechner erreichbar."}, status_code=403)
-        if request.method not in ("GET", "HEAD", "OPTIONS") and request.headers.get("x-maschinenraum") != "1":
-            return JSONResponse({"grund": "kopf_fehlt", "meldung": "Schreibende Aufrufe brauchen den Kopf X-Maschinenraum: 1."}, status_code=403)
-        return await weiter(request)
+    schutz_einrichten(app, lambda: lz.verwalter.einstellungen.oberflaeche.adresse, "X-Maschinenraum")
 
     def dienst(kennung: str):
         d = lz.verwalter.dienste.get(kennung)
@@ -193,18 +165,17 @@ def erstellen(ordner: Ordner) -> FastAPI:
     @app.post("/api/dienste/{kennung}/neustarten")
     async def neustarten(kennung: str) -> BefehlErgebnis:
         dienst(kennung)
-        return await lz.verwalter.neu_starten(kennung)
+        return await lz.verwalter.neu_starten_befehl(kennung)
 
     @app.get("/api/dienste/{kennung}/protokoll")
     async def protokoll(kennung: str, zeilen: int = 200) -> Protokollauszug:
-        d = dienst(kennung)
-        datei = d._protokolldatei()
-        return Protokollauszug(datei=str(datei), zeilen=await asyncio.to_thread(_protokoll_ende, datei, max(1, min(zeilen, 2000))))
+        datei = dienst(kennung).protokolldatei()
+        return Protokollauszug(datei=str(datei), zeilen=await asyncio.to_thread(protokoll_ende, datei, zeilen))
 
     @app.get("/api/protokoll")
     async def eigenes_protokoll(zeilen: int = 200) -> Protokollauszug:
         datei = ordner.protokolle / "maschinenraum.log"
-        return Protokollauszug(datei=str(datei), zeilen=await asyncio.to_thread(_protokoll_ende, datei, max(1, min(zeilen, 2000))))
+        return Protokollauszug(datei=str(datei), zeilen=await asyncio.to_thread(protokoll_ende, datei, zeilen))
 
     @app.put("/api/leitstelle")
     async def leitstelle(daten: LeitstellenDaten) -> LeitstellenStand:
@@ -220,24 +191,5 @@ def erstellen(ordner: Ordner) -> FastAPI:
         lz.kanal.starten()
         return lz.kanal.stand
 
-    _oberflaeche(app)
+    oberflaeche_ausliefern(app, OBERFLAECHE)
     return app
-
-
-def _oberflaeche(app: FastAPI) -> None:
-    """Liefert die gebaute Oberfläche aus; unbekannte Pfade bekommen index.html."""
-    wurzel = OBERFLAECHE
-    if not (wurzel / "index.html").exists():
-        @app.get("/", include_in_schema=False)
-        async def ohne():
-            return JSONResponse({"meldung": "Oberfläche nicht gebaut; Schnittstelle unter /api/stand"})
-        return
-
-    @app.get("/{pfad:path}", include_in_schema=False)
-    async def seite(pfad: str):
-        datei = (wurzel / pfad).resolve()
-        if pfad and datei.is_file() and datei.is_relative_to(wurzel):
-            kopf = {"Cache-Control": "public, max-age=604800, immutable"} if pfad.startswith("assets/") else {"Cache-Control": "no-cache"}
-            return FileResponse(datei, headers=kopf)
-        return FileResponse(wurzel / "index.html", headers={"Cache-Control": "no-cache"})
-

@@ -12,7 +12,9 @@ import sys
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
-from .api import LeitstellenDaten, Protokollauszug, Stand
+from dienstkern.web import Protokollauszug
+
+from .api import LeitstellenDaten, Stand
 from .protokoll import BefehlErgebnis
 
 # Antworten: jedes Feld wird immer mitgeschickt, auch mit Vorgabewert (auch in eingebetteten Modellen)

@@ -152,15 +152,15 @@ class Leitstellenkanal:
 
     async def _senden_im_takt(self, senden, empfang: asyncio.Task) -> None:
         takt = 0
-        await senden(_umschlag("knoten.dienste", self.verwalter.liste(nur_leitstelle=True)))
+        await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
         while not empfang.done():
             await senden(_umschlag("knoten.messwerte", await asyncio.to_thread(self.messer.messen)))
             takt += 1
             if takt % DIENSTLISTE_SPAETESTENS == 0:
-                await senden(_umschlag("knoten.dienste", self.verwalter.liste(nur_leitstelle=True)))
+                await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(self._aenderung_abwarten(empfang), timeout=self.verwalter.einstellungen.messung.takt_s)
-                await senden(_umschlag("knoten.dienste", self.verwalter.liste(nur_leitstelle=True)))
+                await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
                 await asyncio.sleep(0.2)                     # mehrere Änderungen kurz hintereinander zusammenfassen
 
     async def _aenderung_abwarten(self, empfang: asyncio.Task) -> None:

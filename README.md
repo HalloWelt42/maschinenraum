@@ -1,9 +1,13 @@
 # Maschinenraum
 
-Ein Ort für alle Dienste eines Rechners, die neben einem Modell-Läufer laufen: Sprachsynthese, Spracherkennung,
-Bilderzeugung, Musik und was sonst als eigener Prozess Speicher belegt. Statt dass jedes Projekt seine Dienste
-irgendwo im Hintergrund startet, stehen sie hier in einer Liste: was läuft, wie viel Speicher es belegt, starten,
+Ein Ort für alle KI-Dienste eines Rechners, die neben einem Modell-Läufer laufen: Sprachsynthese, Spracherkennung,
+Bilderzeugung, Musik und was sonst ein Modell hält und eine Fähigkeit anbietet. Statt dass jedes Projekt seine Modelle
+irgendwo im Hintergrund lädt, stehen sie hier in einer Liste: was läuft, wie viel Speicher es belegt, starten,
 anhalten, neu starten, Protokoll lesen. Dazu der Speicher des ganzen Rechners nach Herkunft.
+
+Der Maschinenraum nimmt nur KI-Dienste an: jede Dienstdatei braucht mindestens eine Fähigkeit. Eigene Webapps, ihre
+Datenbanken und Docker verwaltet das [Stellwerk](https://github.com/HalloWelt42/stellwerk); sie nutzen KI nur über die
+Leitstelle.
 
 - **Oberfläche im Browser** unter `http://127.0.0.1:8540/`, nur auf diesem Rechner erreichbar.
 - **Menüleistensymbol** auf dem Mac: Dienste mit Schaltern, Speicher, Oberfläche öffnen.
@@ -15,14 +19,18 @@ anhalten, neu starten, Protokoll lesen. Dazu der Speicher des ganzen Rechners na
 ## Zusammenspiel mit der Leitstelle
 
 Maschinenraum und [Leitstelle](https://github.com/HalloWelt42/leitstelle) gehören zusammen. Der Maschinenraum ist je
-Rechner die zweite Stelle neben dem Modell-Läufer: Er bündelt alles, was der Modell-Läufer nicht verwaltet, und ist
-für sich allein bedienbar. Mit einer Leitstelle geht jeder Zugriff nur noch über sie: Anwendungen rufen die
-Leitstelle, die Leitstelle startet, misst und erreicht die Dienste über den Maschinenraum.
+Rechner die zweite Stelle neben dem Modell-Läufer: Er bündelt alle KI-Dienste, die der Modell-Läufer nicht verwaltet,
+etwa die des [Klangwerks](https://github.com/HalloWelt42/klangwerk), und ist für sich allein bedienbar. Mit einer
+Leitstelle geht jeder Zugriff nur noch über sie: Anwendungen rufen die Leitstelle, die Leitstelle startet, misst und
+erreicht die Dienste über den Maschinenraum.
 
 ```
-Anwendungen  ->  Leitstelle  ->  Modell-Läufer      (Sprachmodelle)
-                             ->  Maschinenraum      (alle übrigen Dienste, je Rechner)
+Webapps (Stellwerk)  ->  Leitstelle  ->  Modell-Läufer      (Sprachmodelle)
+                                     ->  Maschinenraum      (übrige KI-Dienste, je Rechner)
 ```
+
+Starten, Anhalten, Abhängigkeiten, Neustarts, Sollzustand und Prozessmessung teilen sich Maschinenraum und Stellwerk
+über den [Dienstkern](https://github.com/HalloWelt42/dienstkern).
 
 ## Installieren
 
@@ -40,7 +48,7 @@ Dienst ein. Derselbe Befehl aktualisiert; Dienstdateien, Einstellungen und Sollz
 | Pfad | Inhalt |
 |---|---|
 | `einstellungen.toml` | Port der Oberfläche, Messtakt, Neustartregeln, optional die Leitstelle |
-| `dienste/<kennung>.toml` | je Dienst eine Datei; der Dateiname ist die Kennung |
+| `dienste/<kennung>.toml` | je KI-Dienst eine Datei; der Dateiname ist die Kennung |
 | `protokolle/maschinenraum.log` | Ausgabe des Maschinenraums |
 | `protokolle/<kennung>.log` | Ausgabe des Dienstes |
 | `zustand.json` | Sollzustand je Dienst und gemessene Höchstwerte |
@@ -55,7 +63,8 @@ ohne Oberfläche:
 
 ## Dienstdatei
 
-Beispiel: [beispiele/bildwerkstatt.toml](beispiele/bildwerkstatt.toml).
+Beispiel: [beispiele/bildwerkstatt.toml](beispiele/bildwerkstatt.toml). Unbekannte Felder und Dateien ohne Fähigkeit
+werden mit einer lesbaren Meldung übergangen.
 
 | Feld | Vorgabe | Bedeutung |
 |---|---|---|
@@ -67,7 +76,7 @@ Beispiel: [beispiele/bildwerkstatt.toml](beispiele/bildwerkstatt.toml).
 | `oberflaeche` | keine | Adresse einer eigenen Oberfläche des Dienstes; die Karte bekommt einen Knopf zum Öffnen |
 | `port` | keiner | erreichbar heißt: der Port nimmt Verbindungen an (IPv4 oder IPv6) |
 | `pruefadresse` | keine | strenger: eine Antwort unter 500 von dieser Adresse |
-| `faehigkeiten` | leer | `stimme`, `hoeren`, `bild_erzeugen`, `musik`, ... |
+| `faehigkeiten` | Pflicht | mindestens eine: `stimme`, `stimme_klonen`, `hoeren`, `sprecher_erkennen`, `sprecher_trennen`, `bild_erzeugen`, `musik`, ... |
 | `speicher_gb` | 1 | Schätzung, bis der Maschinenraum den Dienst gemessen hat |
 | `startzeit_s` | 120 | so lange darf der Start bis zur Erreichbarkeit dauern |
 | `anhaltezeit_s` | 20 | so lange darf das Beenden dauern, danach hart |
@@ -77,22 +86,19 @@ Beispiel: [beispiele/bildwerkstatt.toml](beispiele/bildwerkstatt.toml).
 | `neustart` | ja | nach einem Absturz neu starten, solange der Dienst laufen soll |
 | `leitstelle_anhalten` | ja | die Leitstelle darf ihn anhalten, wenn ein Modell den Speicher braucht und er nicht arbeitet; nein: nur hier von Hand |
 | `aktiv_ab_prozent` | 5 | ab dieser Prozessorlast (Prozent eines Kerns) gilt er als arbeitend; arbeitende Dienste hält die Leitstelle nicht an |
-| `steuerung` | prozess | `prozess`: der Befehl ist der Dienst und läuft, bis er angehalten wird. `befehle`: der Befehl startet etwas und kehrt zurück (zum Beispiel Container) |
-| `pruefbefehl` | keiner | erreichbar heißt: dieser Befehl endet mit 0 (zum Beispiel `docker info`) |
+| `steuerung` | prozess | `prozess`: der Befehl ist der Dienst und läuft, bis er angehalten wird. `befehle`: der Befehl startet etwas und kehrt zurück |
+| `pruefbefehl` | keiner | erreichbar heißt: dieser Befehl endet mit 0 |
 | `anhaltebefehl` | keiner | hält den Dienst mit einem Befehl an statt per Signal; Pflicht bei `befehle` |
 | `prozessmuster` | keines | regulärer Ausdruck auf die Befehlszeile der Prozesse, deren Speicher zählt (bei `befehle`) |
 | `braucht` | leer | Kennungen von Diensten, die vorher laufen müssen; sie werden mitgestartet |
 
 
-## Dienste und Programme
+## Nur KI-Dienste
 
-Was eine Fähigkeit hat (`faehigkeiten` nicht leer), ist ein **Dienst**: Die Leitstelle sieht ihn, kann ihn starten,
-anhalten und Anfragen über die Durchleitung an ihn richten. Alles ohne Fähigkeit ist ein **Programm** (Oberflächen,
-Backends von Anwendungen, Abholer, Datenbanken, Docker): Der Maschinenraum verwaltet es genauso, die Leitstelle sieht
-und schaltet es aber nicht. Sie vermittelt nur Fähigkeiten; sie lädt selbst nie ein Modell.
-
-Container laufen als `steuerung = "befehle"` mit `braucht = ["docker"]`, mit genau dem Compose-Aufruf, den das Projekt
-selbst nutzt (Umgebungsdatei, Projektname); sonst entstünde ein zweites Projekt mit leerem Datenbestand.
+Jeder Dienst hat mindestens eine Fähigkeit: Die Leitstelle sieht ihn, kann ihn starten, anhalten und Anfragen über
+die Durchleitung an ihn richten. Sie vermittelt nur Fähigkeiten; sie lädt selbst nie ein Modell. Programme ohne
+Fähigkeit (Oberflächen und Backends eigener Webapps, ihre Datenbanken, Docker) gehören nicht hierher, sondern ins
+Stellwerk; eine solche Datei übergeht der Maschinenraum mit einem Hinweis.
 
 ## Abgrenzung je Dienst
 

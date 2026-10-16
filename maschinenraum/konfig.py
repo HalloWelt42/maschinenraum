@@ -7,29 +7,24 @@
     <ordner>/zustand.json         Sollzustand je Dienst (übersteht Neustarts) und gemessene Höchstwerte
 
 Die Einstellungsdatei schreibt der Maschinenraum selbst (die Oberfläche ändert sie); Dienstdateien schreibt
-der Mensch oder die Oberfläche.
+der Mensch oder das Installationsskript eines Dienstes. Hier stehen nur KI-Dienste (mit Fähigkeiten); eigene Webapps
+verwaltet das Stellwerk.
 """
 
 from __future__ import annotations
 
 import os
-import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
-from enum import Enum
-
-from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
+from dienstkern.verwalter import Neustartregeln
+from dienstkern.vorlage import Ladefehler, Vorlage, dateien_lesen
+from pydantic import BaseModel, Field, model_validator
 
 from .protokoll import Faehigkeit
 
-KENNUNG = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
-STANDARD_PFAD = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 STANDARD_ORDNER = "~/Maschinenraum"
-
-
-def _pfad(wert: str) -> Path:
-    return Path(os.path.expandvars(wert)).expanduser()
 
 
 # ── Einstellungen ────────────────────────────────────────────────────────
@@ -62,12 +57,6 @@ class Messung(BaseModel):
     macmon: bool = Field(default=True, description="Zusatzmessungen (Grafik, Temperatur, Leistung) über macmon, wenn vorhanden")
 
 
-class Neustart(BaseModel):
-    pausen_s: list[float] = Field(default=[5, 30, 120], min_length=1, description="Pausen vor dem 1., 2., 3. Neustart nach einem Absturz")
-    fenster_s: float = Field(default=600, gt=0, description="Zeitraum, in dem Abstürze gezählt werden")
-    im_fenster: int = Field(default=3, ge=0, description="mehr Abstürze im Zeitraum: der Dienst bleibt aus")
-
-
 class Nachbar(BaseModel):
     modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner, nur zur Anzeige; leer: keiner")
 
@@ -78,7 +67,7 @@ class Einstellungen(BaseModel):
     leitstelle: Leitstelle = Field(default_factory=Leitstelle)
     durchleitung: Durchleitung = Field(default_factory=Durchleitung)
     messung: Messung = Field(default_factory=Messung)
-    neustart: Neustart = Field(default_factory=Neustart)
+    neustart: Neustartregeln = Field(default_factory=Neustartregeln)
     nachbar: Nachbar = Field(default_factory=Nachbar)
 
 
@@ -107,74 +96,19 @@ def toml_schreiben(e: Einstellungen) -> str:
 
 
 # ── Dienste ──────────────────────────────────────────────────────────────
-class Steuerung(str, Enum):
-    PROZESS = "prozess"    # der Befehl ist der Dienst: er läuft, bis er angehalten wird (eigene Prozessgruppe)
-    BEFEHLE = "befehle"    # der Befehl startet etwas und kehrt zurück (zum Beispiel Container); Prüfen und Anhalten per Befehl
+class DienstVorlage(Vorlage):
+    """Eine Datei unter dienste/: ein KI-Dienst mit mindestens einer Fähigkeit, die die Leitstelle vermittelt.
+    Was keine Fähigkeit hat (Webapps, ihre Datenbanken, Docker), gehört ins Stellwerk, nicht hierher."""
 
-
-class DienstVorlage(BaseModel):
-    """Eine Datei unter dienste/. Der Dienst läuft in eigener Sitzung (Prozessgruppe), eigenem Arbeitsordner, mit
-    eigener Umgebung (nur Pfad, Heimordner, Sprache und was hier steht) und eigener Protokolldatei."""
-
-    kennung: str
-    name: str
-    ordner: Path
-    befehl: list[str] = Field(min_length=1)
-    vorher: list[str] = Field(default_factory=list, description="Befehl, der vor jedem Start einmal läuft (zum Beispiel Härtung)")
-    port: int | None = Field(default=None, ge=1, le=65535)
-    pruefadresse: str | None = Field(default=None, description="erreichbar heißt: Antwort unter 500; sonst reicht der offene Port")
-    oberflaeche: str | None = Field(default=None, description="Adresse einer eigenen Oberfläche des Dienstes, zum Öffnen aus dem Maschinenraum")
-    beschreibung: str = ""
-    faehigkeiten: set[Faehigkeit] = Field(default_factory=set)
-    speicher_gb: float = Field(default=1.0, ge=0, description="Schätzung bis zur ersten Messung")
-    startzeit_s: float = Field(default=120, gt=0, description="so lange darf der Start bis zur Erreichbarkeit dauern")
-    anhaltezeit_s: float = Field(default=20, gt=0, description="so lange darf das Beenden dauern, danach hart")
-    umgebung: dict[str, str] = Field(default_factory=dict)
-    umgebung_datei: Path | None = Field(default=None, description="Datei mit Zeilen NAME=WERT, zum Beispiel die .env des Projekts")
-    pfad: str = STANDARD_PFAD
-    neustart: bool = Field(default=True, description="nach einem Absturz neu starten, solange er laufen soll")
+    faehigkeiten: set[Faehigkeit] = Field(min_length=1)
     leitstelle_anhalten: bool = Field(default=True, description="die Leitstelle darf ihn anhalten, um Speicher freizumachen; nein: nur von Hand")
-    steuerung: Steuerung = Field(default=Steuerung.PROZESS)
-    pruefbefehl: list[str] = Field(default_factory=list, description="erreichbar heißt: dieser Befehl endet mit 0")
-    anhaltebefehl: list[str] = Field(default_factory=list, description="hält ihn an; dann nie per Signal (Pflicht bei steuerung = befehle)")
-    prozessmuster: str | None = Field(default=None, description="regulärer Ausdruck auf die Befehlszeile der Prozesse, deren Speicher zählt (für befehle)")
-    braucht: list[str] = Field(default_factory=list, description="Kennungen von Diensten, die vor diesem laufen müssen")
-    aktiv_ab_prozent: float = Field(default=5.0, ge=0, description="ab dieser Prozessorlast (Prozent eines Kerns) gilt er als arbeitend")
 
-    @field_validator("ordner", "umgebung_datei", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def _aufloesen(cls, wert: object) -> object:
-        return _pfad(wert) if isinstance(wert, str) else wert
-
-    @field_validator("kennung")
-    @classmethod
-    def _kennung(cls, wert: str) -> str:
-        if not KENNUNG.match(wert):
-            raise ValueError("Dateiname nur aus Kleinbuchstaben, Ziffern, - und _")
-        return wert
-
-    @model_validator(mode="after")
-    def _steuerung_vollstaendig(self) -> DienstVorlage:
-        if self.steuerung == Steuerung.BEFEHLE:
-            if not self.anhaltebefehl:
-                raise ValueError("steuerung = befehle braucht einen anhaltebefehl")
-            if not (self.port or self.pruefadresse or self.pruefbefehl):
-                raise ValueError("steuerung = befehle braucht port, pruefadresse oder pruefbefehl, um zu sehen, ob er läuft")
-        if self.prozessmuster:
-            re.compile(self.prozessmuster)
-        return self
-
-    def programm(self, umgebung: dict[str, str]) -> list[str]:
-        """Befehl mit aufgelösten Variablen aus der Umgebung des Dienstes; ein relatives Programm gilt ab `ordner`."""
-        teile = [erweitern(t, umgebung) for t in self.befehl]
-        if "/" in teile[0] and not os.path.isabs(teile[0]):
-            teile[0] = str(self.ordner / teile[0])
-        return teile
-
-
-class Ladefehler(BaseModel):
-    datei: str
-    meldung: str
+    def _nur_ki_dienste(cls, daten: Any) -> Any:
+        if isinstance(daten, dict) and not daten.get("faehigkeiten"):
+            raise ValueError("ohne faehigkeiten: der Maschinenraum verwaltet nur KI-Dienste; Webapps und ihre Datenbanken gehören ins Stellwerk")
+        return daten
 
 
 class Ordner:
@@ -236,45 +170,4 @@ class Ordner:
 
     def dienste(self) -> tuple[list[DienstVorlage], list[Ladefehler]]:
         """Alle Dienstdateien; fehlerhafte werden gemeldet und ausgelassen, nie geraten."""
-        vorlagen, fehler = [], []
-        for datei in sorted(self.dienste_ordner.glob("*.toml")):
-            try:
-                with open(datei, "rb") as f:
-                    vorlagen.append(DienstVorlage.model_validate({**tomllib.load(f), "kennung": datei.stem}))
-            except ValidationError as e:
-                fehler.append(Ladefehler(datei=datei.name, meldung=_lesbar(e)))
-            except (OSError, tomllib.TOMLDecodeError) as e:
-                fehler.append(Ladefehler(datei=datei.name, meldung=str(e).splitlines()[0][:200]))
-        return vorlagen, fehler
-
-
-def _lesbar(e: ValidationError) -> str:
-    """Feld und Grund statt der Sammelzeile "1 validation error"."""
-    teile = []
-    for f in e.errors()[:3]:
-        feld = ".".join(str(x) for x in f["loc"])
-        grund = str(f["msg"]).removeprefix("Value error, ")
-        teile.append(f"{feld}: {grund}" if feld else grund)
-    return "; ".join(teile)[:300]
-
-
-def erweitern(text: str, umgebung: dict[str, str]) -> str:
-    """~ am Anfang und $NAME oder ${NAME} aus der gegebenen Umgebung (nicht der des Programms); Unbekanntes bleibt stehen."""
-    text = re.sub(r"\$(?:\{(\w+)\}|(\w+))", lambda m: umgebung.get(m.group(1) or m.group(2), m.group(0)), text)
-    return str(Path(text).expanduser()) if text.startswith("~") else text
-
-
-def umgebung_lesen(datei: Path) -> dict[str, str]:
-    """Zeilen NAME=WERT, Kommentare mit #, Werte ohne umschließende Anführungszeichen."""
-    werte: dict[str, str] = {}
-    for zeile in datei.read_text(encoding="utf-8").splitlines():
-        zeile = zeile.strip()
-        if not zeile or zeile.startswith("#") or "=" not in zeile:
-            continue
-        name, _, wert = zeile.partition("=")
-        name = name.removeprefix("export ").strip()
-        wert = wert.strip()
-        if len(wert) >= 2 and wert[0] == wert[-1] and wert[0] in "\"'":
-            wert = wert[1:-1]
-        werte[name] = wert
-    return werte
+        return dateien_lesen(self.dienste_ordner, DienstVorlage)

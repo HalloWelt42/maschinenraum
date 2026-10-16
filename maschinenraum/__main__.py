@@ -7,26 +7,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import logging.handlers
 from pathlib import Path
 
 import uvicorn
+from dienstkern.web import protokoll_einrichten
 
 from .konfig import STANDARD_ORDNER, Ordner
 from .prozesse import Verwalter
-
-
-def protokoll_einrichten(ordner: Ordner) -> None:
-    """Ausgabe in protokolle/maschinenraum.log (rotierend) und auf die Konsole."""
-    ordner.protokolle.mkdir(parents=True, exist_ok=True)
-    form = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-    datei = logging.handlers.RotatingFileHandler(ordner.protokolle / "maschinenraum.log", maxBytes=5 * 1024 * 1024, backupCount=2, encoding="utf-8")
-    konsole = logging.StreamHandler()
-    for h in (datei, konsole):
-        h.setFormatter(form)
-    wurzel = logging.getLogger()
-    wurzel.setLevel(logging.INFO)
-    wurzel.handlers = [datei, konsole]
 
 
 async def _beide(oberflaeche: uvicorn.Server, durchleitung: uvicorn.Server) -> None:
@@ -41,7 +28,7 @@ def laufen(ordner: Ordner) -> None:
     from . import durchleitung
     from .api import erstellen
     ordner.anlegen()
-    protokoll_einrichten(ordner)
+    protokoll_einrichten(ordner.protokolle / "maschinenraum.log")
     e = ordner.einstellungen()
     app = erstellen(ordner)
     weg = durchleitung.erstellen(app.state.laufzeit)
