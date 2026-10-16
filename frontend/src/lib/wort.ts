@@ -9,6 +9,9 @@ export const FAEHIGKEIT: Record<Faehigkeit, { wort: string; symbol: string; klas
   bild_beschreiben: { wort: 'Bild beschreiben', symbol: 'fa-image', klasse: 'bild', farbe: 'var(--mr-flieder)' },
   bild_erzeugen: { wort: 'Bild erzeugen', symbol: 'fa-palette', klasse: 'bild', farbe: 'var(--mr-flieder)' },
   stimme: { wort: 'Stimme', symbol: 'fa-microphone-lines', klasse: 'stimme', farbe: 'var(--mr-rose)' },
+  stimme_klonen: { wort: 'Stimmklon', symbol: 'fa-clone', klasse: 'stimme', farbe: 'var(--mr-rose)' },
+  sprecher_erkennen: { wort: 'Sprecher erkennen', symbol: 'fa-fingerprint', klasse: 'hoeren', farbe: 'var(--mr-minze)' },
+  sprecher_trennen: { wort: 'Sprecher trennen', symbol: 'fa-people-arrows', klasse: 'hoeren', farbe: 'var(--mr-minze)' },
   musik: { wort: 'Musik', symbol: 'fa-music', klasse: 'musik', farbe: 'var(--mr-violett)' },
   werkzeug: { wort: 'Werkzeuge', symbol: 'fa-screwdriver-wrench', klasse: 'werkzeug', farbe: 'var(--mr-sand)' },
 };

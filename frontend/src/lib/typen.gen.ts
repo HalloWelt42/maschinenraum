@@ -5,7 +5,18 @@
  * via the `definition` "Faehigkeit".
  */
 export type Faehigkeit =
-  'text' | 'einbettung' | 'uebersetzen' | 'hoeren' | 'bild_beschreiben' | 'bild_erzeugen' | 'stimme' | 'musik' | 'werkzeug';
+  | 'text'
+  | 'einbettung'
+  | 'uebersetzen'
+  | 'hoeren'
+  | 'bild_beschreiben'
+  | 'bild_erzeugen'
+  | 'stimme'
+  | 'stimme_klonen'
+  | 'sprecher_erkennen'
+  | 'sprecher_trennen'
+  | 'musik'
+  | 'werkzeug';
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Prozesszustand".

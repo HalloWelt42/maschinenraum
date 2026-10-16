@@ -21,6 +21,9 @@ class Faehigkeit(str, Enum):
     BILD_BESCHREIBEN = "bild_beschreiben"
     BILD_ERZEUGEN = "bild_erzeugen"
     STIMME = "stimme"
+    STIMME_KLONEN = "stimme_klonen"
+    SPRECHER_ERKENNEN = "sprecher_erkennen"
+    SPRECHER_TRENNEN = "sprecher_trennen"
     MUSIK = "musik"
     WERKZEUG = "werkzeug"
 
