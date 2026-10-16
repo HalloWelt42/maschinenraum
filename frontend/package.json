@@ -1,0 +1,26 @@
+{
+  "name": "maschinenraum-oberflaeche",
+  "private": true,
+  "type": "module",
+  "description": "Oberfläche des Maschinenraums (Svelte 5)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "pruefen": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "typen": "node werkzeuge/typen.mjs"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.2.5",
+    "@fontsource/chakra-petch": "^5.2.5",
+    "@fortawesome/fontawesome-free": "^7.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tsconfig/svelte": "^5.0.4",
+    "json-schema-to-typescript": "^16.0.0",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.7",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.0"
+  }
+}

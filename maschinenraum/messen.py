@@ -1,0 +1,303 @@
+"""Messwege des Maschinenraums. Nur Bordmittel des Systems; macmon kommt auf dem Mac als Zusatz dazu, wenn vorhanden.
+
+Speicher auf dem Mac: belegt = (anonyme Seiten - löschbare + fest verdrahtete + Kompressor) mal Seitengröße.
+"Aktive" Seiten zählen nicht, sie enthalten Dateizwischenspeicher. Das entspricht der Anzeige der
+Systemwerkzeuge. Auf Linux: MemTotal - MemAvailable.
+Prozessspeicher: auf dem Mac der physische Fußabdruck (wie die Aktivitätsanzeige; RSS zählt geteilte Seiten
+falsch), auf Linux PSS. Einheit überall GiB, wie die Systemanzeigen.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import ctypes.util
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import threading
+from pathlib import Path
+
+from .protokoll import Messwerte
+
+GIB = 1024**3
+MAC = platform.system() == "Darwin"
+TEMPERATUR_PLAUSIBEL = (15.0, 120.0)            # °C; außerhalb ist es ein Messfehler des Sensors
+
+
+def _befehl(*args: str) -> str:
+    """Systembefehl mit neutraler Spracheinstellung: Zahlen kommen dann mit Punkt, egal wie der Dienst eingestellt ist."""
+    return subprocess.run(args, capture_output=True, text=True, timeout=10, check=True, env={**os.environ, "LC_ALL": "C"}).stdout
+
+
+# ── Rechner ──────────────────────────────────────────────────────────────
+def speicher() -> tuple[float, float, float | None, float | None]:
+    """(gesamt, belegt, swap belegt, swap gesamt) in GiB."""
+    return _speicher_mac() if MAC else _speicher_linux()
+
+
+def _speicher_mac() -> tuple[float, float, float | None, float | None]:
+    gesamt = int(_befehl("sysctl", "-n", "hw.memsize"))
+    vm = _befehl("vm_stat")
+    seite = int(re.search(r"page size of (\d+) bytes", vm).group(1))
+
+    def seiten(name: str) -> int:
+        m = re.search(rf"^{re.escape(name)}:\s+(\d+)\.", vm, re.M)
+        return int(m.group(1)) if m else 0
+
+    belegt = (seiten("Anonymous pages") - seiten("Pages purgeable") + seiten("Pages wired down") + seiten("Pages occupied by compressor")) * seite
+    swap, swap_gesamt = swap_mac(_befehl("sysctl", "-n", "vm.swapusage"))
+    return gesamt / GIB, belegt / GIB, swap, swap_gesamt
+
+
+def swap_mac(text: str) -> tuple[float | None, float | None]:
+    """`total = 18432.00M  used = 17117.56M ...` (auch mit Dezimalkomma) in GiB; unlesbar ergibt None, nie 0."""
+    werte = {k: float(v.replace(",", ".")) for k, v in re.findall(r"(total|used) = ([\d.,]+)M", text)}
+    if "total" not in werte or "used" not in werte:
+        return None, None
+    return werte["used"] / 1024, werte["total"] / 1024
+
+
+def _meminfo() -> dict[str, int]:
+    werte = {}
+    for zeile in Path("/proc/meminfo").read_text().splitlines():
+        name, _, rest = zeile.partition(":")
+        werte[name] = int(rest.split()[0]) * 1024
+    return werte
+
+
+def _speicher_linux() -> tuple[float, float, float | None, float | None]:
+    m = _meminfo()
+    swap_gesamt = m.get("SwapTotal", 0)
+    return m["MemTotal"] / GIB, (m["MemTotal"] - m["MemAvailable"]) / GIB, (swap_gesamt - m.get("SwapFree", 0)) / GIB, swap_gesamt / GIB
+
+
+def platte_frei_gb() -> float:
+    wurzel = "/System/Volumes/Data" if MAC and os.path.isdir("/System/Volumes/Data") else "/"
+    return shutil.disk_usage(wurzel).free / GIB
+
+
+def temperatur_linux() -> float | None:
+    datei = Path("/sys/class/thermal/thermal_zone0/temp")
+    try:
+        return int(datei.read_text().strip()) / 1000
+    except (OSError, ValueError):
+        return None
+
+
+class CpuLinux:
+    """Prozessorlast aus /proc/stat zwischen zwei Messungen."""
+
+    def __init__(self) -> None:
+        self._vorher: tuple[int, int] | None = None
+
+    def messen(self) -> float | None:
+        try:
+            felder = [int(x) for x in Path("/proc/stat").read_text().splitlines()[0].split()[1:]]
+        except (OSError, ValueError, IndexError):
+            return None
+        leer, summe = felder[3] + (felder[4] if len(felder) > 4 else 0), sum(felder)
+        vorher, self._vorher = self._vorher, (leer, summe)
+        if vorher is None or summe == vorher[1]:
+            return None
+        return round(100 * (1 - (leer - vorher[0]) / (summe - vorher[1])), 1)
+
+
+class Macmon:
+    """Liest fortlaufend die Zeilen von `macmon pipe` und hält die letzte; ohne macmon bleibt alles leer."""
+
+    def __init__(self, takt_s: float) -> None:
+        self.letzte: dict | None = None
+        self._prozess: subprocess.Popen | None = None
+        self._takt_ms = int(takt_s * 1000)
+        self._kerne = (self._sysctl_int("hw.perflevel1.logicalcpu"), self._sysctl_int("hw.perflevel0.logicalcpu"))
+
+    @staticmethod
+    def vorhanden() -> bool:
+        return MAC and shutil.which("macmon") is not None
+
+    @staticmethod
+    def _sysctl_int(name: str) -> int:
+        try:
+            return int(_befehl("sysctl", "-n", name))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return 0
+
+    def starten(self) -> None:
+        self._prozess = subprocess.Popen(["macmon", "pipe", "-i", str(self._takt_ms)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        threading.Thread(target=self._lesen, name="macmon", daemon=True).start()
+
+    def _lesen(self) -> None:
+        assert self._prozess and self._prozess.stdout
+        for zeile in self._prozess.stdout:
+            try:
+                self.letzte = json.loads(zeile)
+            except json.JSONDecodeError:
+                continue
+
+    def beenden(self) -> None:
+        if self._prozess and self._prozess.poll() is None:
+            self._prozess.terminate()
+
+    def zusatz(self) -> dict[str, float | None]:
+        d = self.letzte
+        if not d:
+            return {}
+        e, p = d.get("ecpu_usage", [0, 0])[1], d.get("pcpu_usage", [0, 0])[1]
+        ne, np_ = self._kerne
+        cpu = (e * ne + p * np_) / (ne + np_) if ne + np_ else max(e, p)
+        temperatur = d.get("temp", {}).get("cpu_temp_avg") or 0
+        return {"cpu_prozent": round(cpu * 100, 1), "grafik_prozent": round(d.get("gpu_usage", [0, 0])[1] * 100, 1),
+                # im Leerlauf meldet der Sensor gelegentlich Unsinn (einstellige Grade); dann lieber nichts zeigen
+                "temperatur_c": round(temperatur, 1) if TEMPERATUR_PLAUSIBEL[0] <= temperatur <= TEMPERATUR_PLAUSIBEL[1] else None,
+                "leistung_w": round(d.get("all_power", 0), 1) or None}
+
+
+class Messer:
+    def __init__(self, takt_s: float, macmon: bool) -> None:
+        self.macmon = Macmon(takt_s) if macmon and Macmon.vorhanden() else None
+        self.cpu = None if MAC else CpuLinux()
+        if self.macmon:
+            self.macmon.starten()
+
+    def messwege(self) -> list[str]:
+        wege = ["speicher", "swap", "platte", "last"]
+        if self.cpu:
+            wege += ["cpu", "temperatur"]
+        if self.macmon:
+            wege += ["cpu", "grafik", "temperatur", "leistung"]
+        return wege
+
+    def messen(self) -> Messwerte:
+        gesamt, belegt, swap, swap_gesamt = speicher()
+        werte = Messwerte(speicher_gesamt_gb=round(gesamt, 2), speicher_belegt_gb=round(belegt, 2),
+                          swap_belegt_gb=round(swap, 2) if swap is not None else None,
+                          swap_gesamt_gb=round(swap_gesamt, 2) if swap_gesamt is not None else None,
+                          last_1m=round(os.getloadavg()[0], 2), platte_frei_gb=round(platte_frei_gb(), 1))
+        if self.cpu:
+            werte.cpu_prozent, werte.temperatur_c = self.cpu.messen(), temperatur_linux()
+        if self.macmon:
+            werte = werte.model_copy(update=self.macmon.zusatz())
+        return werte
+
+    def beenden(self) -> None:
+        if self.macmon:
+            self.macmon.beenden()
+
+
+# ── Prozesse ─────────────────────────────────────────────────────────────
+class _RusageV0(ctypes.Structure):
+    _fields_ = [("uuid", ctypes.c_uint8 * 16), ("user_time", ctypes.c_uint64), ("system_time", ctypes.c_uint64),
+                ("pkg_idle_wkups", ctypes.c_uint64), ("interrupt_wkups", ctypes.c_uint64), ("pageins", ctypes.c_uint64),
+                ("wired_size", ctypes.c_uint64), ("resident_size", ctypes.c_uint64), ("phys_footprint", ctypes.c_uint64),
+                ("proc_start_abstime", ctypes.c_uint64), ("proc_exit_abstime", ctypes.c_uint64)]
+
+
+_libproc = ctypes.CDLL(ctypes.util.find_library("proc") or "/usr/lib/libproc.dylib") if MAC else None
+
+
+def prozess_bytes(pid: int) -> int:
+    """Speicher eines Prozesses in Byte; 0, wenn er nicht (mehr) lesbar ist."""
+    if MAC:
+        info = _RusageV0()
+        if _libproc.proc_pid_rusage(pid, 0, ctypes.byref(info)) != 0:
+            return 0
+        return int(info.phys_footprint)
+    try:
+        for zeile in Path(f"/proc/{pid}/smaps_rollup").read_text().splitlines():
+            if zeile.startswith("Pss:"):
+                return int(zeile.split()[1]) * 1024
+    except OSError:
+        pass
+    try:
+        for zeile in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if zeile.startswith("VmRSS:"):
+                return int(zeile.split()[1]) * 1024
+    except OSError:
+        pass
+    return 0
+
+
+class Prozesstabelle:
+    """Eine Momentaufnahme aller lebenden Prozesse (pid, Eltern, Gruppe), um Gruppen und Nachfahren zu finden.
+    Zombies (beendet, noch nicht abgeholt) zählen nicht als lebend."""
+
+    def __init__(self) -> None:
+        self.eltern: dict[int, int] = {}
+        self.gruppe: dict[int, int] = {}
+        for pid, ppid, pgid, zustand in (self._ps() if MAC else self._proc()):
+            if not zustand.startswith("Z"):
+                self.eltern[pid], self.gruppe[pid] = ppid, pgid
+
+    @staticmethod
+    def _ps():
+        for zeile in _befehl("ps", "-A", "-o", "pid=,ppid=,pgid=,stat=").splitlines():
+            teile = zeile.split()
+            if len(teile) == 4:
+                yield int(teile[0]), int(teile[1]), int(teile[2]), teile[3]
+
+    @staticmethod
+    def _proc():
+        """Linux ohne Zusatzprogramme: /proc/<pid>/stat, Felder nach dem Programmnamen in Klammern."""
+        for eintrag in Path("/proc").iterdir():
+            if not eintrag.name.isdigit():
+                continue
+            try:
+                rest = (eintrag / "stat").read_text().rsplit(")", 1)[1].split()
+            except (OSError, IndexError):
+                continue
+            yield int(eintrag.name), int(rest[1]), int(rest[2]), rest[0]
+
+    def in_gruppe(self, pgid: int) -> list[int]:
+        return [p for p, g in self.gruppe.items() if g == pgid]
+
+    def mit_nachfahren(self, wurzel: int) -> list[int]:
+        kinder: dict[int, list[int]] = {}
+        for p, e in self.eltern.items():
+            kinder.setdefault(e, []).append(p)
+        ergebnis, offen = [], [wurzel]
+        while offen:
+            p = offen.pop()
+            if p in self.eltern or p == wurzel:
+                ergebnis.append(p)
+                offen.extend(kinder.get(p, []))
+        return ergebnis
+
+
+def lauschender_prozess(port: int) -> int | None:
+    """Prozess, der auf dem Port lauscht (für fremd gestartete Dienste)."""
+    if not MAC:
+        return _lauschend_linux(port)
+    try:
+        ausgabe = _befehl("lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t")
+        return int(ausgabe.split()[0]) if ausgabe.strip() else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def _lauschend_linux(port: int) -> int | None:
+    """Linux ohne Zusatzprogramme: Socket-Knoten aus /proc/net/tcp(6) im Zustand LISTEN, dann der Prozess,
+    der ihn offen hat (nur eigene Prozesse sind lesbar, das genügt)."""
+    knoten = set()
+    for datei in ("/proc/net/tcp", "/proc/net/tcp6"):
+        try:
+            zeilen = Path(datei).read_text().splitlines()[1:]
+        except OSError:
+            continue
+        for zeile in zeilen:
+            f = zeile.split()
+            if len(f) > 9 and f[3] == "0A" and int(f[1].rsplit(":", 1)[1], 16) == port:
+                knoten.add(f"socket:[{f[9]}]")
+    if not knoten:
+        return None
+    for eintrag in Path("/proc").iterdir():
+        if not eintrag.name.isdigit():
+            continue
+        try:
+            if any(os.readlink(fd) in knoten for fd in (eintrag / "fd").iterdir()):
+                return int(eintrag.name)
+        except OSError:
+            continue
+    return None

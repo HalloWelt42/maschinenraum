@@ -1,0 +1,17 @@
+# Beispiel einer Dienstdatei. Ablage: ~/Maschinenraum/dienste/<kennung>.toml; der Dateiname ist die Kennung.
+# Pflicht sind name, ordner und befehl. Alles andere hat Vorgaben (siehe README.md).
+
+name = "Bildwerkstatt"
+ordner = "~/Programme/bildwerkstatt/server"           # Arbeitsordner; der Dienst sieht nur diesen als Ausgangspunkt
+befehl = ["../.venv/bin/python", "main.py", "--port", "8188", "--listen", "127.0.0.1"]
+vorher = ["../haerten.sh"]                             # läuft vor jedem Start einmal; scheitert er, startet nichts
+port = 8188                                             # erreichbar heißt: der Port nimmt Verbindungen an
+# pruefadresse = "http://127.0.0.1:8188/"              # strenger: Antwort unter 500
+faehigkeiten = ["bild_erzeugen"]
+speicher_gb = 12                                        # Schätzung bis zur ersten Messung
+startzeit_s = 180                                       # bis dahin muss er erreichbar sein, sonst wird er wieder beendet
+anhaltezeit_s = 20                                      # danach hart beenden
+neustart = true                                         # nach Absturz neu starten, solange er laufen soll
+
+[umgebung]                                              # zusätzlich zu Pfad, Heimordner und Sprache
+HF_HUB_OFFLINE = "1"
