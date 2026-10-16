@@ -12,6 +12,18 @@ anhalten, neu starten, Protokoll lesen. Dazu der Speicher des ganzen Rechners na
 - **Optional mit Leitstelle:** eine Leitstelle im Netz kann die Dienste mit einplanen, starten und anhalten
   und sieht den echten Speicher dieses Rechners. Ohne sie arbeitet der Maschinenraum genauso.
 
+## Zusammenspiel mit der Leitstelle
+
+Maschinenraum und [Leitstelle](https://github.com/HalloWelt42/leitstelle) gehören zusammen. Der Maschinenraum ist je
+Rechner die zweite Stelle neben dem Modell-Läufer: Er bündelt alles, was der Modell-Läufer nicht verwaltet, und ist
+für sich allein bedienbar. Mit einer Leitstelle geht jeder Zugriff nur noch über sie: Anwendungen rufen die
+Leitstelle, die Leitstelle startet, misst und erreicht die Dienste über den Maschinenraum.
+
+```
+Anwendungen  ->  Leitstelle  ->  Modell-Läufer      (Sprachmodelle)
+                             ->  Maschinenraum      (alle übrigen Dienste, je Rechner)
+```
+
 ## Installieren
 
 Python 3.11 oder neuer; für die Oberfläche Node, für das Menüleistensymbol die Befehlszeilenwerkzeuge von Xcode.
