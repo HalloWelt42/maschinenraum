@@ -103,9 +103,10 @@ class Leitstellenkanal:
     def anmeldung(self) -> KnotenAnmeldung:
         gesamt = self.messer.messen().speicher_gesamt_gb
         system = f"{platform.system()} {platform.mac_ver()[0] or platform.release()}"
-        name = self.ordner.einstellungen().name or socket.gethostname().removesuffix(".local")
+        e = self.ordner.einstellungen()
+        name = e.name or socket.gethostname().removesuffix(".local")
         return KnotenAnmeldung(name=name, betriebssystem=system, architektur=platform.machine(), speicher_gb=gesamt,
-                               agent_version=__version__, messwege=self.messer.messwege())
+                               agent_version=__version__, messwege=self.messer.messwege(), durchleitung_port=e.durchleitung.port)
 
     async def _schleife(self, kanal: str, pause_max: float) -> None:
         pause = 1.0

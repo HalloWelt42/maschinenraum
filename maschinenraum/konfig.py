@@ -36,6 +36,13 @@ class Oberflaeche(BaseModel):
     port: int = Field(default=8540, ge=1, le=65535)
 
 
+class Durchleitung(BaseModel):
+    """Weg der Leitstelle zu den Diensten (wie bei einem Modell-Läufer); nur mit dem Schlüssel nutzbar."""
+
+    adresse: str = Field(default="0.0.0.0", description="im Netz erreichbar, damit die Leitstelle Anfragen durchreichen kann")
+    port: int = Field(default=8541, ge=1, le=65535)
+
+
 class Leitstelle(BaseModel):
     adresse: str | None = Field(default=None, description="Basisadresse der Leitstelle, zum Beispiel http://leitstelle:8530; leer: ohne Leitstelle")
     wiederverbindung_max_s: float = Field(default=30, ge=1, description="längste Pause zwischen Verbindungsversuchen")
@@ -67,6 +74,7 @@ class Einstellungen(BaseModel):
     name: str | None = Field(default=None, description="Anzeigename des Rechners; sonst der Rechnername")
     oberflaeche: Oberflaeche = Field(default_factory=Oberflaeche)
     leitstelle: Leitstelle = Field(default_factory=Leitstelle)
+    durchleitung: Durchleitung = Field(default_factory=Durchleitung)
     messung: Messung = Field(default_factory=Messung)
     neustart: Neustart = Field(default_factory=Neustart)
     nachbar: Nachbar = Field(default_factory=Nachbar)

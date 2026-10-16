@@ -29,12 +29,24 @@ def protokoll_einrichten(ordner: Ordner) -> None:
     wurzel.handlers = [datei, konsole]
 
 
+async def _beide(oberflaeche: uvicorn.Server, durchleitung: uvicorn.Server) -> None:
+    """Oberfläche (nur dieser Rechner) und Durchleitung (für die Leitstelle) in einem Prozess; endet einer, enden beide."""
+    aufgaben = {asyncio.create_task(oberflaeche.serve()), asyncio.create_task(durchleitung.serve())}
+    _, offen = await asyncio.wait(aufgaben, return_when=asyncio.FIRST_COMPLETED)
+    oberflaeche.should_exit = durchleitung.should_exit = True
+    await asyncio.gather(*offen, return_exceptions=True)
+
+
 def laufen(ordner: Ordner) -> None:
+    from . import durchleitung
     from .api import erstellen
     ordner.anlegen()
     protokoll_einrichten(ordner)
-    e = ordner.einstellungen().oberflaeche
-    uvicorn.run(erstellen(ordner), host=e.adresse, port=e.port, log_level="warning", access_log=False)
+    e = ordner.einstellungen()
+    app = erstellen(ordner)
+    weg = durchleitung.erstellen(app.state.laufzeit)
+    asyncio.run(_beide(uvicorn.Server(uvicorn.Config(app, host=e.oberflaeche.adresse, port=e.oberflaeche.port, log_level="warning", access_log=False)),
+                       uvicorn.Server(uvicorn.Config(weg, host=e.durchleitung.adresse, port=e.durchleitung.port, log_level="warning", access_log=False))))
 
 
 async def liste(ordner: Ordner) -> None:

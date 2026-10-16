@@ -34,6 +34,7 @@ class KnotenAnmeldung(BaseModel):
     speicher_gb: float
     agent_version: str
     messwege: list[str] = Field(default_factory=list)
+    durchleitung_port: int | None = None    # Port, über den die Leitstelle Anfragen an die Dienste durchreicht
 
 
 class Messwerte(BaseModel):
