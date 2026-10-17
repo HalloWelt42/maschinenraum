@@ -86,6 +86,12 @@ class Stand(BaseModel):
     nachbar: nachbar.NachbarStand
 
 
+class Fassung(BaseModel):
+    """Fassung des laufenden Programms; die Oberfläche vergleicht sie mit ihrer eingebauten und lädt bei Abweichung neu."""
+
+    version: str
+
+
 class LeitstellenDaten(BaseModel):
     adresse: str | None = Field(default=None, max_length=255, description="leer: ohne Leitstelle")
     schluessel: str | None = Field(default=None, max_length=200, description="None: unverändert; leer: entfernen")
@@ -186,6 +192,10 @@ def erstellen(ordner: Ordner) -> FastAPI:
     @app.get("/api/stand")
     async def stand() -> Stand:
         return lz.stand()
+
+    @app.get("/api/version")
+    async def fassung() -> Fassung:
+        return Fassung(version=__version__)
 
     @app.post("/api/dienste/{kennung}/starten")
     async def starten(kennung: str) -> BefehlErgebnis:

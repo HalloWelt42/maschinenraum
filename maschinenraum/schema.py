@@ -15,11 +15,11 @@ from pydantic.json_schema import models_json_schema
 from dienstkern.verwalter import Ergebnis
 from dienstkern.web import Protokollauszug
 
-from .api import LeitstellenDaten, Stand
+from .api import Fassung, LeitstellenDaten, Stand
 from .protokoll import BefehlErgebnis
 
 # Antworten: jedes Feld wird immer mitgeschickt, auch mit Vorgabewert (auch in eingebetteten Modellen)
-AUSGABE: list[type[BaseModel]] = [Stand, BefehlErgebnis, Ergebnis, Protokollauszug]
+AUSGABE: list[type[BaseModel]] = [Stand, Fassung, BefehlErgebnis, Ergebnis, Protokollauszug]
 # Eingaben: Felder mit Vorgabewert dürfen fehlen
 EINGABE: list[type[BaseModel]] = [LeitstellenDaten]
 

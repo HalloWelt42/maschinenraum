@@ -1,4 +1,5 @@
-"""Lokale Schnittstelle: Stand, Schalten, Protokoll, Leitstelle eintragen, Schutz gegen fremde Seiten."""
+"""Lokale Schnittstelle: Stand, Schalten, Protokoll, Leitstelle eintragen, Schutz gegen fremde Seiten, Fassung und
+Auslieferung der Oberfläche."""
 
 from __future__ import annotations
 
@@ -6,8 +7,10 @@ import stat
 import time
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
+from maschinenraum import __version__, api
 from maschinenraum.api import erstellen
 from maschinenraum.konfig import Ordner
 
@@ -95,3 +98,19 @@ def test_steuerprogramm_im_betrieb(tmp_path: Path):
         assert c.post("/api/betrieb/stellwerk/anhalten", headers=SCHREIBEN).json()["erfolg"]
         assert not offen(port)
         assert c.post("/api/betrieb/gibtsnicht/starten", headers=SCHREIBEN).status_code == 404
+
+
+def test_fassung_und_auslieferung_der_oberflaeche(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Die Oberfläche vergleicht ihre Fassung mit /api/version; die Startseite kommt ohne Zwischenspeicher, auch für HEAD."""
+    wurzel = (tmp_path / "oberflaeche").resolve()
+    (wurzel / "assets").mkdir(parents=True)
+    (wurzel / "index.html").write_text("<!doctype html>")
+    (wurzel / "assets" / "index-abc123.js").write_text("")
+    monkeypatch.setattr(api, "OBERFLAECHE", wurzel)
+    with client(ordner_mit_dienst(tmp_path, freier_port())) as c:
+        assert c.get("/api/version").json() == {"version": __version__}
+        for methode in ("GET", "HEAD"):
+            for pfad in ("/", "/dienste/probe"):
+                a = c.request(methode, pfad)
+                assert a.status_code == 200 and a.headers["cache-control"] == "no-cache", (methode, pfad)
+            assert "immutable" in c.request(methode, "/assets/index-abc123.js").headers["cache-control"]

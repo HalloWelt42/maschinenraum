@@ -2,6 +2,7 @@
   // Verbindung zur Leitstelle: optional. Adresse und Schlüssel eintragen, trennen. Der Schlüssel wird nie angezeigt,
   // nur ersetzt; er liegt in der Datei schluessel im Ordner des Maschinenraums.
   import { api } from '../lib/api';
+  import { arbeit } from '../lib/arbeit.svelte';
   import { vor } from '../lib/format';
   import { tun } from '../lib/meldung.svelte';
   import { lage } from '../lib/stand.svelte';
@@ -15,6 +16,7 @@
   let adresse = $state('');
   let schluessel = $state('');
   let sichtbar = $state(false);
+  arbeit.bearbeitung(() => bearbeiten);
 
   function oeffnen() {
     adresse = l.adresse ?? '';

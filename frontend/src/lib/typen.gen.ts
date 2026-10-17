@@ -45,6 +45,7 @@ export type Befehlsart = 'dienst_starten' | 'dienst_anhalten';
 
 export interface Maschinenraum {
   Stand?: Stand;
+  Fassung?: Fassung;
   BefehlErgebnis?: BefehlErgebnis;
   Ergebnis?: Ergebnis;
   Protokollauszug?: Protokollauszug;
@@ -264,6 +265,15 @@ export interface NachbarModell {
   name: string;
   gb: number;
   geladen: boolean;
+}
+/**
+ * Fassung des laufenden Programms; die Oberfläche vergleicht sie mit ihrer eingebauten und lädt bei Abweichung neu.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Fassung".
+ */
+export interface Fassung {
+  version: string;
 }
 /**
  * `knoten.befehl_ergebnis`, mit `bezug` auf den Befehl.

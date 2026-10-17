@@ -1,6 +1,7 @@
 // Zugriff auf die lokale Schnittstelle /api/*. Schreibende Aufrufe tragen den Kopf X-Maschinenraum,
-// den fremde Webseiten nicht setzen dürfen.
-import type { BefehlErgebnis, Ergebnis, LeitstellenDaten, LeitstellenStand, Protokollauszug, Stand } from './typen.gen';
+// den fremde Webseiten nicht setzen dürfen, und zählen als laufende Arbeit, solange ihre Antwort aussteht.
+import { arbeit } from './arbeit.svelte';
+import type { BefehlErgebnis, Ergebnis, Fassung, LeitstellenDaten, LeitstellenStand, Protokollauszug, Stand } from './typen.gen';
 
 export class ApiFehler extends Error {
   constructor(public grund: string, public begruendung: string, public status: number) {
@@ -8,7 +9,11 @@ export class ApiFehler extends Error {
   }
 }
 
-async function rufen<T>(pfad: string, methode = 'GET', daten?: unknown): Promise<T> {
+function rufen<T>(pfad: string, methode = 'GET', daten?: unknown): Promise<T> {
+  return methode === 'GET' ? senden<T>(pfad, methode, daten) : arbeit.rahmen(() => senden<T>(pfad, methode, daten));
+}
+
+async function senden<T>(pfad: string, methode: string, daten?: unknown): Promise<T> {
   const kopf: Record<string, string> = methode === 'GET' ? {} : { 'X-Maschinenraum': '1' };
   if (daten !== undefined) kopf['Content-Type'] = 'application/json';
   const antwort = await fetch(`/api${pfad}`, { method: methode, headers: kopf, body: daten === undefined ? undefined : JSON.stringify(daten) });
@@ -22,6 +27,7 @@ async function rufen<T>(pfad: string, methode = 'GET', daten?: unknown): Promise
 }
 
 export const api = {
+  version: () => rufen<Fassung>('/version'),
   stand: () => rufen<Stand>('/stand'),
   starten: (k: string) => rufen<BefehlErgebnis>(`/dienste/${k}/starten`, 'POST'),
   anhalten: (k: string) => rufen<BefehlErgebnis>(`/dienste/${k}/anhalten`, 'POST'),

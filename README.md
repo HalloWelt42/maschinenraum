@@ -166,6 +166,7 @@ plant seinen Speicher ein und hält ihn bei Speichernot wieder an, wenn seine Di
 | Aufruf | Wirkung |
 |---|---|
 | `GET /api/stand` | alle Dienste, Messwerte, Leitstelle, Modell-Läufer |
+| `GET /api/version` | Fassung des laufenden Programms; weicht sie von der eingebauten ab, lädt die Oberfläche von selbst neu |
 | `POST /api/dienste/<kennung>/starten`, `/anhalten`, `/neustarten` | schalten; Antwort mit Erfolg und Meldung |
 | `GET /api/dienste/<kennung>/protokoll?zeilen=200` | Ende der Protokolldatei |
 | `PUT /api/leitstelle` | Adresse und Schlüssel der Leitstelle setzen oder entfernen |
