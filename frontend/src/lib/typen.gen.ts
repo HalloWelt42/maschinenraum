@@ -16,7 +16,8 @@ export type Faehigkeit =
   | 'sprecher_erkennen'
   | 'sprecher_trennen'
   | 'musik'
-  | 'werkzeug';
+  | 'werkzeug'
+  | 'ton';
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Prozesszustand".

@@ -14,6 +14,7 @@ export const FAEHIGKEIT: Record<Faehigkeit, { wort: string; symbol: string; klas
   sprecher_trennen: { wort: 'Sprecher trennen', symbol: 'fa-people-arrows', klasse: 'hoeren', farbe: 'var(--mr-minze)' },
   musik: { wort: 'Musik', symbol: 'fa-music', klasse: 'musik', farbe: 'var(--mr-violett)' },
   werkzeug: { wort: 'Werkzeuge', symbol: 'fa-screwdriver-wrench', klasse: 'werkzeug', farbe: 'var(--mr-sand)' },
+  ton: { wort: 'Ton bearbeiten', symbol: 'fa-wave-square', klasse: 'hoeren', farbe: 'var(--mr-minze)' },
 };
 
 /** Farbe eines Dienstes in der Speicheranzeige: nach seiner ersten Fähigkeit, sonst neutral */
