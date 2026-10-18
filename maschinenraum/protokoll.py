@@ -29,6 +29,16 @@ class Faehigkeit(str, Enum):
     TON = "ton"                       # Tonarbeit ohne Modell (wandeln, messen, mischen)
 
 
+class Eignung(str, Enum):
+    """Wofür ein Modell oder Dienst besonders taugt, über seine Fähigkeiten hinaus (Selbstauskunft, PROTOKOLL 4.8 der Leitstelle)."""
+
+    DENKEN = "denken"                 # schließt schrittweise; für schwierige Fragen, dauert länger
+    PROGRAMMIEREN = "programmieren"
+    LANGE_TEXTE = "lange_texte"       # großer Kontext (ab 100 000 Token)
+    SCHNELL = "schnell"               # kurze Wartezeit, auch auf Kosten der Tiefe
+    GRUENDLICH = "gruendlich"         # beste Ergebnisse, auch auf Kosten der Zeit
+
+
 class KnotenAnmeldung(BaseModel):
     """`knoten.anmelden`: wer der Agent ist und was er messen kann."""
 
@@ -64,6 +74,15 @@ class Prozesszustand(str, Enum):
     GESTOERT = "gestoert"
 
 
+class Selbstauskunft(BaseModel):
+    """Was ein Dienst über sich oder sein Modell sagt (PROTOKOLL 4.8): wofür er gemacht ist. Leer heißt: sagt nichts."""
+
+    zweck: str = ""                                          # ein Satz: wofür gemacht oder optimiert
+    eignung: list[Eignung] = Field(default_factory=list)
+    sprachen: list[str] = Field(default_factory=list)        # ISO 639-1; leer: nicht angegeben
+    quantisierung: str | None = None                         # wie der Dienst sie nennt, etwa 4bit, FP8
+
+
 class ProzessBericht(BaseModel):
     """Ein Dienst, den der Agent verwaltet (eine Datei in seinem Ordner `dienste/`)."""
 
@@ -78,6 +97,7 @@ class ProzessBericht(BaseModel):
     aktiv: bool = False                 # arbeitet gerade (Prozessorlast über der Schwelle des Dienstes)
     anhalten_erlaubt: bool = True       # darf die Leitstelle ihn anhalten, um Speicher freizumachen
     plaetze: int = 1                    # so viele Anfragen nimmt er gleichzeitig an
+    selbstauskunft: Selbstauskunft = Field(default_factory=Selbstauskunft)   # aus seiner Dienstdatei
     meldung: str = ""
 
 

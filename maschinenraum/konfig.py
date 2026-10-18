@@ -22,9 +22,9 @@ from typing import Any
 
 from dienstkern.verwalter import Neustartregeln
 from dienstkern.vorlage import Ladefehler, Vorlage, dateien_lesen
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .protokoll import Faehigkeit
+from .protokoll import Eignung, Faehigkeit
 
 STANDARD_ORDNER = "~/Maschinenraum"
 
@@ -105,6 +105,16 @@ class DienstVorlage(Vorlage):
     faehigkeiten: set[Faehigkeit] = Field(min_length=1)
     leitstelle_anhalten: bool = Field(default=True, description="die Leitstelle darf ihn anhalten, um Speicher freizumachen; nein: nur von Hand")
     plaetze: int = Field(default=1, ge=1, le=64, description="so viele Anfragen nimmt der Dienst gleichzeitig an; die Leitstelle teilt danach zu")
+    eignung: list[Eignung] = Field(default_factory=list, description="wofür er besonders taugt (denken, programmieren, lange_texte, schnell, gruendlich); geht mit der beschreibung als Selbstauskunft an die Leitstelle")
+    sprachen: list[str] = Field(default_factory=list, description="Sprachen, die er kann (ISO 639-1, etwa de, en); leer heißt nicht angegeben")
+
+    @field_validator("sprachen")
+    @classmethod
+    def _sprachkuerzel(cls, werte: list[str]) -> list[str]:
+        falsch = [w for w in werte if not (len(w) == 2 and w.isascii() and w.isalpha() and w.islower())]
+        if falsch:
+            raise ValueError(f"Sprachen als zwei Kleinbuchstaben nach ISO 639-1 (de, en, fr), nicht {', '.join(falsch)}")
+        return werte
 
     @model_validator(mode="before")
     @classmethod

@@ -134,3 +134,23 @@ async def test_plaetze_aus_der_dienstdatei_und_start_der_leitstelle(tmp_path: Pa
     v.dienste["probe"].abstuerze.extend([0.0] * (v.regeln.im_fenster + 1))
     e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"), von_leitstelle=True)
     assert not e.erfolg and "bleibt nach" in e.meldung
+
+
+async def test_selbstauskunft_aus_der_dienstdatei(tmp_path: Path):
+    """Die Dienstdatei sagt, wofür der Dienst gemacht ist (beschreibung, eignung, sprachen); der Bericht an die Leitstelle
+    trägt es als Selbstauskunft (PROTOKOLL 4.8 der Leitstelle). Falsche Sprachkürzel lehnt die Datei ab."""
+    from maschinenraum.konfig import DienstVorlage
+    from maschinenraum.protokoll import Eignung
+    from maschinenraum.prozesse import bericht
+
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, port, beschreibung='"Sprechen mit fester Stimme, für Vorlesen"', eignung='["schnell"]', sprachen='["de", "en"]')
+    v = verwalter(o)
+    await v.runde()
+    a = bericht(v.dienste["probe"]).selbstauskunft
+    assert a.zweck == "Sprechen mit fester Stimme, für Vorlesen" and a.eignung == [Eignung.SCHNELL] and a.sprachen == ["de", "en"]
+    try:
+        DienstVorlage.model_validate({"kennung": "x", "name": "x", "ordner": str(tmp_path), "befehl": ["x"], "faehigkeiten": ["stimme"], "sprachen": ["Deutsch"]})
+        raise AssertionError("Sprachkürzel nach ISO 639-1 verlangt")
+    except ValueError as f:
+        assert "ISO 639-1" in str(f)

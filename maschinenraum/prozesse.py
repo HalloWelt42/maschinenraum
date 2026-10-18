@@ -16,7 +16,7 @@ from dienstkern.verwalter import Verwalter as Kernverwalter
 from dienstkern.zustand import Soll
 
 from .konfig import DienstVorlage, Einstellungen, Ordner
-from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Dienstliste, ProzessBericht, Prozesszustand
+from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Dienstliste, ProzessBericht, Prozesszustand, Selbstauskunft
 
 __all__ = ["Soll", "Verwalter", "bericht"]
 
@@ -29,7 +29,8 @@ def bericht(d: Dienst) -> ProzessBericht:
     assert isinstance(v, DienstVorlage)
     return ProzessBericht(kennung=b.kennung, name=b.name, faehigkeiten=set(v.faehigkeiten), port=b.port, zustand=Prozesszustand(b.zustand.value),
                           fremd=b.fremd, gb_jetzt=b.gb_jetzt, bedarf_gb=b.bedarf_gb, aktiv=b.aktiv, anhalten_erlaubt=v.leitstelle_anhalten,
-                          plaetze=v.plaetze, meldung=b.meldung)
+                          plaetze=v.plaetze, selbstauskunft=Selbstauskunft(zweck=v.beschreibung, eignung=list(v.eignung), sprachen=list(v.sprachen)),
+                          meldung=b.meldung)
 
 
 def _als_befehlergebnis(art: Befehlsart, e: Ergebnis) -> BefehlErgebnis:

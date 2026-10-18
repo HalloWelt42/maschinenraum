@@ -75,11 +75,14 @@ werden mit einer lesbaren Meldung übergangen.
 | `ordner` | Pflicht | Arbeitsordner; `~` und `$VAR` werden aufgelöst |
 | `befehl` | Pflicht | Programm und Argumente als Liste; ein relativer Programmpfad gilt ab `ordner`; `$NAME` kommt aus der Umgebung des Dienstes (auch aus `umgebung_datei`) |
 | `vorher` | leer | Befehl, der vor jedem Start einmal läuft |
-| `beschreibung` | leer | ein Satz für die Oberfläche |
+| `beschreibung` | leer | ein Satz: wofür der Dienst gemacht ist; steht in der Oberfläche und geht als Zweck der Selbstauskunft an die Leitstelle |
 | `oberflaeche` | keine | Adresse einer eigenen Oberfläche des Dienstes; die Karte bekommt einen Knopf zum Öffnen |
 | `port` | keiner | erreichbar heißt: der Port nimmt Verbindungen an (IPv4 oder IPv6) |
 | `pruefadresse` | keine | strenger: eine Antwort unter 500 von dieser Adresse |
 | `faehigkeiten` | Pflicht | mindestens eine: `stimme`, `stimme_klonen`, `hoeren`, `sprecher_erkennen`, `sprecher_trennen`, `bild_erzeugen`, `musik`, ... |
+| `eignung` | leer | wofür er besonders taugt, Wörter aus `denken`, `programmieren`, `lange_texte`, `schnell`, `gruendlich` (Selbstauskunft) |
+| `sprachen` | leer | Sprachen, die er kann, als Kürzel nach ISO 639-1 (`de`, `en`); leer heißt nicht angegeben (Selbstauskunft) |
+| `plaetze` | 1 | so viele Anfragen nimmt er gleichzeitig an; die Leitstelle teilt danach zu |
 | `speicher_gb` | 1 | Schätzung, bis der Maschinenraum den Dienst gemessen hat |
 | `startzeit_s` | 120 | so lange darf der Start bis zur Erreichbarkeit dauern |
 | `anhaltezeit_s` | 20 | so lange darf das Beenden dauern, danach hart |
