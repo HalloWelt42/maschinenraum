@@ -55,7 +55,7 @@ Dienst ein. Derselbe Befehl aktualisiert; Dienstdateien, Einstellungen und Sollz
 | `zustand.json` | Sollzustand je Dienst und gemessene Höchstwerte |
 | `betrieb/<kennung>.toml` | Steuerprogramme des Rechners (etwa das Stellwerk), von deren Installation eingetragen |
 | `betrieb.json` | Sollzustand der Steuerprogramme |
-| `schluessel` | Schlüssel für die Leitstelle, nur für den Benutzer lesbar |
+| `schluessel` | Schlüssel für die Leitstelle, nur für den Benutzer lesbar; jeder Rechner braucht seinen eigenen (in der Leitstelle auf der Karte des Rechners ausgestellt). Einen Ordner mit Schlüssel auf einen zweiten Mac kopieren heißt: beide melden sich als derselbe Rechner und trennen sich gegenseitig |
 
 Neue oder geänderte Dienstdateien liest der Maschinenraum im nächsten Takt; ein Neustart ist nicht nötig. Stand
 ohne Oberfläche:
