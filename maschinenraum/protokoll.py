@@ -26,6 +26,7 @@ class Faehigkeit(str, Enum):
     SPRECHER_TRENNEN = "sprecher_trennen"
     MUSIK = "musik"
     WERKZEUG = "werkzeug"
+    TON = "ton"                       # Tonarbeit ohne Modell (wandeln, messen, mischen)
 
 
 class KnotenAnmeldung(BaseModel):

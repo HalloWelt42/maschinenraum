@@ -109,7 +109,7 @@ class DienstVorlage(Vorlage):
     @classmethod
     def _nur_ki_dienste(cls, daten: Any) -> Any:
         if isinstance(daten, dict) and not daten.get("faehigkeiten"):
-            raise ValueError("ohne faehigkeiten: der Maschinenraum verwaltet nur KI-Dienste; Webapps und ihre Datenbanken gehören ins Stellwerk")
+            raise ValueError("ohne faehigkeiten: der Maschinenraum verwaltet nur Rechendienste (KI und Tonarbeit); Webapps und ihre Datenbanken gehören ins Stellwerk")
         return daten
 
 
