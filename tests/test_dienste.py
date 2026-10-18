@@ -118,3 +118,19 @@ def test_leistung_wie_macmon_total():
     assert leistung_w({"all_power": 2.2258, "sys_power": 15.8748}) == 15.9
     assert leistung_w({"all_power": 2.2258, "sys_power": 0.0}) == 2.2
     assert leistung_w({}) is None
+
+
+async def test_plaetze_aus_der_dienstdatei_und_start_der_leitstelle(tmp_path: Path):
+    """Die Dienstdatei nennt die Plätze (Vorgabe 1), der Bericht an die Leitstelle trägt sie. Ein Start der Leitstelle
+    löscht keine Abstürze: bleibt ein Dienst nach zu vielen aus, startet sie ihn nicht."""
+    from maschinenraum.prozesse import bericht
+    from maschinenraum.protokoll import Befehl, Befehlsart
+
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, port, plaetze="4")
+    v = verwalter(o)
+    await v.runde()
+    assert bericht(v.dienste["probe"]).plaetze == 4
+    v.dienste["probe"].abstuerze.extend([0.0] * (v.regeln.im_fenster + 1))
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"), von_leitstelle=True)
+    assert not e.erfolg and "bleibt nach" in e.meldung

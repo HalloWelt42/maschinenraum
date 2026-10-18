@@ -29,7 +29,7 @@ def bericht(d: Dienst) -> ProzessBericht:
     assert isinstance(v, DienstVorlage)
     return ProzessBericht(kennung=b.kennung, name=b.name, faehigkeiten=set(v.faehigkeiten), port=b.port, zustand=Prozesszustand(b.zustand.value),
                           fremd=b.fremd, gb_jetzt=b.gb_jetzt, bedarf_gb=b.bedarf_gb, aktiv=b.aktiv, anhalten_erlaubt=v.leitstelle_anhalten,
-                          meldung=b.meldung)
+                          plaetze=v.plaetze, meldung=b.meldung)
 
 
 def _als_befehlergebnis(art: Befehlsart, e: Ergebnis) -> BefehlErgebnis:
@@ -58,8 +58,8 @@ class Verwalter(Kernverwalter):
         if von_leitstelle and b.befehl == Befehlsart.DIENST_ANHALTEN and d is not None and not d.vorlage.leitstelle_anhalten:
             log.info("Leitstelle wollte %s anhalten; laut Dienstdatei nur von Hand", d.vorlage.name)
             return BefehlErgebnis(befehl=b.befehl, ziel=b.ziel, erfolg=False, meldung="Anhalten nur von Hand (Dienstdatei: leitstelle_anhalten = false)")
-        if b.befehl == Befehlsart.DIENST_STARTEN:
-            return _als_befehlergebnis(b.befehl, await self.starten(b.ziel))
+        if b.befehl == Befehlsart.DIENST_STARTEN:     # ein Start der Leitstelle ist kein Start von Hand (Abstürze bleiben)
+            return _als_befehlergebnis(b.befehl, await self.starten(b.ziel, von_hand=not von_leitstelle))
         return _als_befehlergebnis(b.befehl, await self.anhalten(b.ziel))
 
     async def neu_starten_befehl(self, kennung: str) -> BefehlErgebnis:

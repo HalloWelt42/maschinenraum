@@ -104,6 +104,7 @@ class DienstVorlage(Vorlage):
 
     faehigkeiten: set[Faehigkeit] = Field(min_length=1)
     leitstelle_anhalten: bool = Field(default=True, description="die Leitstelle darf ihn anhalten, um Speicher freizumachen; nein: nur von Hand")
+    plaetze: int = Field(default=1, ge=1, le=64, description="so viele Anfragen nimmt der Dienst gleichzeitig an; die Leitstelle teilt danach zu")
 
     @model_validator(mode="before")
     @classmethod
