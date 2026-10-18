@@ -35,5 +35,8 @@ def test_durchleitung(tmp_path: Path):
         r = c.get("/probe/hallo.txt?a=1", headers=SCHLUESSEL)
         assert r.status_code == 200 and r.content.decode() == "Grüße aus dem Dienst"
         assert c.get("/probe/fehlt.txt", headers=SCHLUESSEL).status_code == 404               # Antwort des Dienstes, unverändert
+        assert lz.durchleitungen == 0, "jede durchgereichte Anfrage ist wieder abgezählt"
+        with TestClient(app, base_url="http://127.0.0.1:8540") as oben:
+            assert oben.get("/api/durchleitungen").json() == {"laufend": 0}
         assert c.get("/", headers=SCHLUESSEL).json()["dienste"] == ["probe"]
         asyncio.run(lz.verwalter.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe")))

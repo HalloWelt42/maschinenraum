@@ -68,11 +68,18 @@ def erstellen(laufzeit) -> FastAPI:
             return _absage(409, "dienst_aus", f"{d.vorlage.name} läuft nicht ({d.zustand.value}).")
         kopf = {k: v for k, v in request.headers.items() if k.lower() not in OHNE_KOPF}
         ziel = httpx.URL(f"http://127.0.0.1:{d.vorlage.port}/{pfad}", query=request.url.query.encode())
+        laufzeit.durchleitungen += 1          # gezählt bis die Antwort ganz durch ist (Neustart nur ohne laufende)
         try:
             antwort = await client.send(client.build_request(request.method, ziel, headers=kopf, content=request.stream()), stream=True)
         except httpx.HTTPError as f:
+            laufzeit.durchleitungen -= 1
             return _absage(502, "dienst_nicht_erreichbar", f"{d.vorlage.name}: {type(f).__name__} {f}".strip())
+
+        async def fertig() -> None:
+            laufzeit.durchleitungen -= 1
+            await antwort.aclose()
+
         zurueck = {k: v for k, v in antwort.headers.items() if k.lower() not in OHNE_KOPF}
-        return StreamingResponse(antwort.aiter_raw(), status_code=antwort.status_code, headers=zurueck, background=BackgroundTask(antwort.aclose))
+        return StreamingResponse(antwort.aiter_raw(), status_code=antwort.status_code, headers=zurueck, background=BackgroundTask(fertig))
 
     return app

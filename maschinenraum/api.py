@@ -112,6 +112,7 @@ class Laufzeit:
         self.messwerte: Messwerte | None = None
         self.nachbar = nachbar.NachbarStand(adresse=e.nachbar.modell_laeufer)
         self.aufgaben: list[asyncio.Task] = []
+        self.durchleitungen = 0               # Anfragen der Leitstelle, die gerade zu einem Dienst durchgereicht werden
 
     async def _messen(self) -> None:
         while True:
@@ -196,6 +197,11 @@ def erstellen(ordner: Ordner) -> FastAPI:
     @app.get("/api/version")
     async def fassung() -> Fassung:
         return Fassung(version=__version__)
+
+    @app.get("/api/durchleitungen")
+    async def durchleitungen() -> dict[str, int]:
+        """Wie viele Anfragen gerade durchgereicht werden; ein Neustart wartet, bis es keine sind (installieren.sh)."""
+        return {"laufend": lz.durchleitungen}
 
     @app.post("/api/dienste/{kennung}/starten")
     async def starten(kennung: str) -> BefehlErgebnis:

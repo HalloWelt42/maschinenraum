@@ -7,6 +7,7 @@
 # baut die Oberfläche (wenn Node vorhanden ist) und richtet es als Dienst ein, der Neustarts übersteht:
 # macOS launchd (startet mit der Anmeldung), Linux systemd im Benutzerkontext. Auf dem Mac kommt das
 # Menüleistensymbol dazu. Dienstdateien, Einstellungen, Schlüssel und Sollzustand bleiben bei einer Aktualisierung.
+# Neu gestartet wird erst, wenn keine Anfrage der Leitstelle durchgereicht wird (SOFORT=1 ./installieren.sh ohne Warten).
 # Ein Ordner des früheren Knoten-Agenten (~/Leitstelle-Agent) wird einmal übernommen.
 set -eu
 
@@ -61,6 +62,13 @@ PY="$ORDNER/.venv/bin/python"
 PORT="$("$PY" -c "from maschinenraum.konfig import Ordner; from pathlib import Path; print(Ordner(Path('$ORDNER')).einstellungen().oberflaeche.port)")"
 
 # ── Als Dienst einrichten ────────────────────────────────────────────────
+ruhig_abwarten() {  # nie mitten in eine Anfrage der Leitstelle hinein neu starten: warten, bis keine durchgereicht wird
+  [ "${SOFORT:-}" = 1 ] && return
+  laufend() { curl -fsS -m 5 "http://127.0.0.1:$PORT/api/durchleitungen" 2>/dev/null | "$PY" -c 'import sys, json; print(json.load(sys.stdin)["laufend"])' 2>/dev/null || echo 0; }
+  if [ "$(laufend)" != 0 ]; then meldung "Wartet, bis keine Anfrage mehr durchgereicht wird ..."; fi
+  while [ "$(laufend)" != 0 ]; do sleep 1; done
+}
+
 launchd_laden() {   # Abmelden läuft im Hintergrund weiter; erst neu laden, wenn der alte Dienst weg ist
   launchctl bootout "gui/$(id -u)/$1" 2>/dev/null || true
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
@@ -93,6 +101,7 @@ case "$(uname -s)" in
 </dict>
 </plist>
 EOF
+    ruhig_abwarten
     launchd_laden "$KENNUNG" "$PLIST"
     meldung "Maschinenraum läuft als launchd-Dienst $KENNUNG (startet mit der Anmeldung)."
     if [ -x "$HIER/menueleiste/bauen.sh" ] && command -v swiftc >/dev/null; then
@@ -135,6 +144,7 @@ WantedBy=default.target
 EOF
     systemctl --user daemon-reload
     systemctl --user enable --now "$KENNUNG.service"
+    ruhig_abwarten
     systemctl --user restart "$KENNUNG.service"
     meldung "Maschinenraum läuft als systemd-Dienst im Benutzerkontext."
     if [ "$(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null || echo no)" != "yes" ]; then
