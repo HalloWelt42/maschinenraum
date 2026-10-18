@@ -128,3 +128,16 @@ class BefehlErgebnis(BaseModel):
     ziel: str
     erfolg: bool
     meldung: str = ""
+
+
+class Schlafgrund(str, Enum):
+    LEERLAUF = "leerlauf"             # nach der Leerlaufzeit des Rechners
+    ANGEFORDERT = "angefordert"       # von Hand: Menü, Deckel, Ein-Taste, pmset sleepnow
+
+
+class KnotenSchlaeft(BaseModel):
+    """`knoten.schlaeft`: der Rechner schläft gleich ein. Die Leitstelle antwortet mit `knoten.schlaf_vermerkt` (mit `bezug`)
+    und wartet, bis er wach ist; danach schließt der Agent die Verbindung mit dem Grund `schlaeft`."""
+
+    grund: Schlafgrund
+    meldung: str = ""
