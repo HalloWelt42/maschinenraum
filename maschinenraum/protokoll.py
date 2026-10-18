@@ -98,6 +98,8 @@ class ProzessBericht(BaseModel):
     anhalten_erlaubt: bool = True       # darf die Leitstelle ihn anhalten, um Speicher freizumachen
     plaetze: int = 1                    # so viele Anfragen nimmt er gleichzeitig an
     selbstauskunft: Selbstauskunft = Field(default_factory=Selbstauskunft)   # aus seiner Dienstdatei
+    instanz_von: str | None = None      # weitere Instanz dieses Dienstes (Kennung <grund>.<n>); None: Grundinstanz
+    instanzen: int = 1                  # so viele Instanzen darf die Leitstelle höchstens starten
     meldung: str = ""
 
 

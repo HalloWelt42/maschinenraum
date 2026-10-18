@@ -83,6 +83,7 @@ werden mit einer lesbaren Meldung übergangen.
 | `eignung` | leer | wofür er besonders taugt, Wörter aus `denken`, `programmieren`, `lange_texte`, `schnell`, `gruendlich` (Selbstauskunft) |
 | `sprachen` | leer | Sprachen, die er kann, als Kürzel nach ISO 639-1 (`de`, `en`); leer heißt nicht angegeben (Selbstauskunft) |
 | `plaetze` | 1 | so viele Anfragen nimmt er gleichzeitig an; die Leitstelle teilt danach zu |
+| `instanzen` | 1 | so viele Prozesse darf die Leitstelle bei Andrang starten; Instanz n heißt `<kennung>.<n>`, läuft auf `port + 100 (n-1)` und bekommt ihren Port in `MASCHINENRAUM_PORT` (im `befehl` als `$MASCHINENRAUM_PORT`, Pflicht ab 2). Weitere Instanzen leben nur im Speicher und folgen der Datei; angehalten sind sie weg |
 | `speicher_gb` | 1 | Schätzung, bis der Maschinenraum den Dienst gemessen hat |
 | `startzeit_s` | 120 | so lange darf der Start bis zur Erreichbarkeit dauern |
 | `anhaltezeit_s` | 20 | so lange darf das Beenden dauern, danach hart |

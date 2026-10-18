@@ -154,3 +154,49 @@ async def test_selbstauskunft_aus_der_dienstdatei(tmp_path: Path):
         raise AssertionError("Sprachkürzel nach ISO 639-1 verlangt")
     except ValueError as f:
         assert "ISO 639-1" in str(f)
+
+
+async def test_weitere_instanz_auf_eigenem_port(tmp_path: Path):
+    """Dienstdatei mit instanzen = 2: die Leitstelle startet die zweite Instanz (probe.2) auf port + 100, ihren Port
+    bekommt der Befehl aus $MASCHINENRAUM_PORT; eine dritte gibt es nicht; angehalten ist die Instanz weg."""
+    from maschinenraum.protokoll import Befehl, Befehlsart
+
+    while True:
+        port = freier_port()
+        if port + 100 < 65536:
+            try:
+                with socket.socket() as s:
+                    s.bind(("127.0.0.1", port + 100))
+                break
+            except OSError:
+                continue
+    (tmp_path / "dienste").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "einstellungen.toml").write_text('[messung]\ntakt_s = 1\nmacmon = false\n[neustart]\npausen_s = [0.2]\n')
+    (tmp_path / "dienste" / "probe.toml").write_text(
+        f'name = "Probe"\nordner = "{tmp_path}"\nbefehl = ["{sys.executable}", "-m", "http.server", "$MASCHINENRAUM_PORT", "--bind", "127.0.0.1"]\n'
+        f'port = {port}\nfaehigkeiten = ["hoeren"]\nspeicher_gb = 0.5\nstartzeit_s = 15\nanhaltezeit_s = 5\ninstanzen = 2\n')
+    v = verwalter(Ordner(tmp_path))
+    await v.runde()
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe.2"), von_leitstelle=True)
+    assert e.erfolg, e.meldung
+    await v.runde()
+    b = next(x for x in v.liste().dienste if x.kennung == "probe.2")
+    assert b.port == port + 100 and b.instanz_von == "probe" and b.instanzen == 2 and b.zustand == Prozesszustand.LAEUFT and b.name == "Probe (2)"
+    assert next(x for x in v.liste().dienste if x.kennung == "probe").instanz_von is None
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe.3"), von_leitstelle=True)
+    assert not e.erfolg and "erlaubt 2" in e.meldung
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe.2"), von_leitstelle=True)
+    assert e.erfolg
+    await v.runde()
+    assert [x.kennung for x in v.liste().dienste] == ["probe"]
+
+
+def test_instanzen_brauchen_den_port_im_befehl(tmp_path: Path):
+    from maschinenraum.konfig import DienstVorlage
+    grund = {"kennung": "x", "name": "x", "ordner": str(tmp_path), "faehigkeiten": ["hoeren"], "port": 9000, "instanzen": 2}
+    try:
+        DienstVorlage.model_validate({**grund, "befehl": ["dienst", "--port", "9000"]})
+        raise AssertionError("ohne $MASCHINENRAUM_PORT können Instanzen nicht auf eigenen Ports laufen")
+    except ValueError as f:
+        assert "MASCHINENRAUM_PORT" in str(f)
+    assert DienstVorlage.model_validate({**grund, "befehl": ["dienst", "--port", "$MASCHINENRAUM_PORT"]}).instanzen == 2

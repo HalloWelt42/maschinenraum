@@ -98,6 +98,10 @@ def toml_schreiben(e: Einstellungen) -> str:
 
 
 # ── Dienste ──────────────────────────────────────────────────────────────
+PORT_VARIABLE = "MASCHINENRAUM_PORT"   # Umgebung jeder Instanz: ihr Port
+PORT_PLATZHALTER = "$" + PORT_VARIABLE
+INSTANZ_PORT_ABSTAND = 100             # Instanz n läuft auf port + 100 (n-1)
+
 class DienstVorlage(Vorlage):
     """Eine Datei unter dienste/: ein KI-Dienst mit mindestens einer Fähigkeit, die die Leitstelle vermittelt.
     Was keine Fähigkeit hat (Webapps, ihre Datenbanken, Docker), gehört ins Stellwerk, nicht hierher."""
@@ -105,8 +109,19 @@ class DienstVorlage(Vorlage):
     faehigkeiten: set[Faehigkeit] = Field(min_length=1)
     leitstelle_anhalten: bool = Field(default=True, description="die Leitstelle darf ihn anhalten, um Speicher freizumachen; nein: nur von Hand")
     plaetze: int = Field(default=1, ge=1, le=64, description="so viele Anfragen nimmt der Dienst gleichzeitig an; die Leitstelle teilt danach zu")
+    instanzen: int = Field(default=1, ge=1, le=8, description="so viele Prozesse darf die Leitstelle bei Andrang starten; Instanz n "
+                           "läuft auf port + 100 (n-1), ihren Port nimmt der befehl als $MASCHINENRAUM_PORT")
     eignung: list[Eignung] = Field(default_factory=list, description="wofür er besonders taugt (denken, programmieren, lange_texte, schnell, gruendlich); geht mit der beschreibung als Selbstauskunft an die Leitstelle")
     sprachen: list[str] = Field(default_factory=list, description="Sprachen, die er kann (ISO 639-1, etwa de, en); leer heißt nicht angegeben")
+
+    @model_validator(mode="after")
+    def _instanzen_brauchen_port(self) -> "DienstVorlage":
+        if self.instanzen > 1:
+            if self.port is None or not any(PORT_PLATZHALTER in teil or "${" + PORT_VARIABLE + "}" in teil for teil in self.befehl):
+                raise ValueError(f"instanzen > 1 braucht port und ${PORT_VARIABLE} im befehl (jede Instanz hat ihren eigenen Port)")
+            if "." in self.kennung:
+                raise ValueError("instanzen > 1 nur für Dienste ohne Punkt in der Kennung (Instanzen heißen <kennung>.<n>)")
+        return self
 
     @field_validator("sprachen")
     @classmethod
