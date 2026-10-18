@@ -29,6 +29,7 @@ from .leitstelle import Leitstellenkanal, LeitstellenStand
 from .messen import Messer
 from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Faehigkeit, Messwerte, Prozesszustand
 from .prozesse import Soll, Verwalter, bericht
+from .schlaf import Schlafwaechter
 
 log = logging.getLogger("maschinenraum")
 OBERFLAECHE = Path(__file__).resolve().parent / "oberflaeche"
@@ -113,6 +114,8 @@ class Laufzeit:
         self.nachbar = nachbar.NachbarStand(adresse=e.nachbar.modell_laeufer)
         self.aufgaben: list[asyncio.Task] = []
         self.durchleitungen = 0               # Anfragen der Leitstelle, die gerade zu einem Dienst durchgereicht werden
+        # Schlaf des Rechners: der Leitstelle melden; solange durchgereicht wird, keinen Leerlaufschlaf (Einstellung schlaf)
+        self.schlaf = Schlafwaechter(self.kanal, lambda: self.durchleitungen, lambda: self.verwalter.einstellungen.schlaf)
 
     async def _messen(self) -> None:
         while True:
@@ -127,8 +130,10 @@ class Laufzeit:
         self.aufgaben = [asyncio.create_task(self.verwalter.schleife(), name="dienste"), asyncio.create_task(self.betrieb.schleife(), name="betrieb"),
                          asyncio.create_task(self._messen(), name="messen")]
         self.kanal.starten()
+        await asyncio.to_thread(self.schlaf.starten, asyncio.get_running_loop())
 
     async def beenden(self) -> None:
+        await asyncio.to_thread(self.schlaf.stoppen)
         await self.kanal.beenden()
         for t in self.aufgaben:
             t.cancel()

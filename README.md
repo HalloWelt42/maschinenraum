@@ -48,7 +48,7 @@ Dienst ein. Derselbe Befehl aktualisiert; Dienstdateien, Einstellungen und Sollz
 
 | Pfad | Inhalt |
 |---|---|
-| `einstellungen.toml` | Port der Oberfläche, Messtakt, Neustartregeln, optional die Leitstelle |
+| `einstellungen.toml` | Port der Oberfläche, Messtakt, Neustartregeln, Schlaf, optional die Leitstelle |
 | `dienste/<kennung>.toml` | je KI-Dienst eine Datei; der Dateiname ist die Kennung |
 | `protokolle/maschinenraum.log` | Ausgabe des Maschinenraums |
 | `protokolle/<kennung>.log` | Ausgabe des Dienstes |
@@ -155,6 +155,17 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `leitstelle` | `adresse` | keine | Basisadresse einer Leitstelle; den Schlüssel trägt man in der Oberfläche ein |
 | `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten, nur mit Schlüssel |
 | `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner, nur zur Anzeige |
+| `schlaf` | `melden` | ja | auf dem Mac: beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, bis er wach ist |
+| `schlaf` | `leerlauf_aufschieben` | ja | solange die Leitstelle über diesen Rechner rechnen lässt, kein Schlaf nach Leerlauf; Deckel, Menü und Ein-Taste wirken weiter |
+
+## Schlaf des Rechners
+
+Der Maschinenraum erkennt selbst, wann der Mac einschläft und aufwacht (Energieverwaltung von macOS, ohne die
+Menüleiste). Vor dem Einschlafen meldet er der Leitstelle `knoten.schlaeft` und schließt die Verbindung; die Leitstelle
+lässt Aufträge dann nicht scheitern, sondern sagt den Apps, dass sie warten sollen, bis er wach ist. Nach dem Aufwachen
+verbindet er sich sofort neu (bei einem kurzen Erwachen ohne Bildschirm, Power Nap, nicht). Kommt keine Weckmeldung,
+gilt er nach zwei Minuten Wachzeit als wach. Schlaf nach Leerlauf schiebt er auf, solange eine Anfrage der Leitstelle
+durch ihn läuft (Einstellung `schlaf.leerlauf_aufschieben`).
 
 ## Nur über die Leitstelle
 

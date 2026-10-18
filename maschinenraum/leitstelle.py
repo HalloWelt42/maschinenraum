@@ -3,6 +3,12 @@
 Nach dem Verbinden: `knoten.anmelden`, dann Messwerte im Takt, die Dienstliste bei jeder Änderung (und
 spätestens alle zehn Takte) und Antworten auf Befehle. Ohne Verbindung arbeitet der Maschinenraum
 unverändert weiter. Der Zustand der Verbindung ist für die Oberfläche lesbar.
+
+Schlaf (schlaf.py meldet ihn): vor dem Einschlafen `knoten.schlaeft`, höchstens `VERMERK_S` auf
+`knoten.schlaf_vermerkt` warten (eine ältere Leitstelle antwortet nie), dann mit dem Grund `schlaeft` schließen. Bis zum
+Aufwachen ruht die Verbindung; danach sofort neu, eine noch offen scheinende Verbindung wird geschlossen. Ein Wächter
+hält es für aufgewacht, wenn `WACHZEIT_S` Wachzeit ohne Weckmeldung vergehen (time.monotonic zählt auf dem Mac den
+Schlaf nicht mit).
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ import logging
 import platform
 import socket
 import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -24,12 +31,14 @@ from pydantic import BaseModel, Field, ValidationError
 from . import __version__
 from .konfig import Ordner
 from .messen import Messer
-from .protokoll import Befehl, KnotenAnmeldung
+from .protokoll import Befehl, KnotenAnmeldung, KnotenSchlaeft, Schlafgrund
 from .prozesse import Verwalter
 
 log = logging.getLogger("maschinenraum")
 PROTOKOLL = "leitstelle/1"
 DIENSTLISTE_SPAETESTENS = 10                     # Takte
+VERMERK_S = 3.0                                  # so lange wartet das Einschlafen auf knoten.schlaf_vermerkt
+WACHZEIT_S = 120.0                               # Wächter: so viel Wachzeit ohne Weckmeldung, dann gilt der Rechner als wach
 
 
 class Verbindung(str, Enum):
@@ -39,6 +48,7 @@ class Verbindung(str, Enum):
     VERBUNDEN = "verbunden"
     ABGEWIESEN = "abgewiesen"         # Schlüssel unbekannt oder erneuert
     NICHT_ERREICHBAR = "nicht_erreichbar"
+    SCHLAEFT = "schlaeft"             # der Rechner schläft; die Verbindung ruht bis zum Aufwachen
 
 
 class LeitstellenStand(BaseModel):
@@ -64,11 +74,22 @@ def _umschlag(art: str, nutzlast: BaseModel, bezug: str | None = None) -> str:
     return Umschlag(art=art, nutzlast=nutzlast.model_dump(mode="json"), bezug=bezug).model_dump_json()
 
 
+Senden = Callable[[str], Awaitable[None]]
+
+
 class Leitstellenkanal:
     def __init__(self, ordner: Ordner, verwalter: Verwalter, messer: Messer) -> None:
         self.ordner, self.verwalter, self.messer = ordner, verwalter, messer
         self.stand = LeitstellenStand(adresse=None, zustand=Verbindung.AUS)
         self._aufgabe: asyncio.Task | None = None
+        self._ws: Any = None                         # die laufende Verbindung: Schlaf melden, beim Aufwachen schließen
+        self._senden: Senden | None = None
+        self._wach = asyncio.Event()                 # gelöscht, solange der Rechner schläft
+        self._wach.set()
+        self._unterbrechen = asyncio.Event()         # beendet die Pause vor dem nächsten Versuch (Aufwachen)
+        self._pause_s = 1.0
+        self._vermerkt: dict[str, asyncio.Future[None]] = {}
+        self._waechter: asyncio.Task | None = None
 
     def _setzen(self, zustand: Verbindung, meldung: str = "") -> None:
         if zustand != self.stand.zustand or meldung != self.stand.meldung:
@@ -94,10 +115,64 @@ class Leitstellenkanal:
 
     async def beenden(self) -> None:
         t, self._aufgabe = self._aufgabe, None
-        if t:
-            t.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await t
+        for aufgabe in (t, self._waechter):
+            if aufgabe:
+                aufgabe.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await aufgabe
+        self._waechter = None
+
+    # ── Schlaf ───────────────────────────────────────────────────────────
+    async def einschlafen(self, grund: Schlafgrund) -> None:
+        """Der Rechner schläft gleich ein: der Leitstelle melden und die Verbindung schließen. Dauert höchstens etwa
+        zweimal `VERMERK_S`; der Aufrufer quittiert danach den Schlaf bei macOS. Ohne Leitstelle gibt es nichts zu tun."""
+        if self._aufgabe is None:
+            return
+        self._wach.clear()
+        self._setzen(Verbindung.SCHLAEFT, "Rechner schläft" + (" nach Leerlauf" if grund == Schlafgrund.LEERLAUF else ""))
+        ws, senden = self._ws, self._senden
+        if ws is not None and senden is not None:
+            await self._schlaf_melden(senden, grund)
+            with contextlib.suppress(websockets.exceptions.WebSocketException, OSError, asyncio.TimeoutError):
+                await asyncio.wait_for(ws.close(1000, "schlaeft"), VERMERK_S)
+        if self._waechter is not None:
+            self._waechter.cancel()
+        self._waechter = asyncio.create_task(self._wachzeit(), name="leitstelle-wachzeit")
+
+    async def _schlaf_melden(self, senden: Senden, grund: Schlafgrund) -> None:
+        u = Umschlag(art="knoten.schlaeft", nutzlast=KnotenSchlaeft(grund=grund).model_dump(mode="json"))
+        zukunft: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        self._vermerkt[u.id] = zukunft
+        try:
+            await senden(u.model_dump_json())
+            await asyncio.wait_for(zukunft, VERMERK_S)
+            log.info("Leitstelle hat den Schlaf vermerkt")
+        except asyncio.TimeoutError:
+            log.info("Leitstelle antwortet nicht auf knoten.schlaeft (ältere Fassung?); die Verbindung wird trotzdem geschlossen")
+        except (websockets.exceptions.ConnectionClosed, OSError) as f:
+            log.warning("Schlaf nicht gemeldet: %s", type(f).__name__)
+        finally:
+            self._vermerkt.pop(u.id, None)
+
+    def aufwachen(self) -> None:
+        """Der Rechner ist wach: sofort neu verbinden (Pause zurück auf 1 s). Eine Verbindung, die noch offen scheint, ist
+        nach dem Schlaf tot (die Leitstelle hat sie längst aufgegeben) und wird geschlossen."""
+        if self._waechter is not None and self._waechter is not asyncio.current_task():
+            self._waechter.cancel()
+        self._waechter = None
+        self._wach.set()
+        self._pause_s = 1.0
+        self._unterbrechen.set()
+        if self._ws is not None:
+            self._ws.transport.abort()
+
+    async def _wachzeit(self) -> None:
+        """Wächter: kommt keine Weckmeldung (verpasst, oder nur kurz erwacht und nicht wieder eingeschlafen), gilt der
+        Rechner nach `WACHZEIT_S` Wachzeit als wach. asyncio misst mit time.monotonic, das während des Schlafs ruht."""
+        await asyncio.sleep(WACHZEIT_S)
+        if not self._wach.is_set():
+            log.info("Leitstelle: keine Weckmeldung nach %.0f s Wachzeit; verbinde neu", WACHZEIT_S)
+            self.aufwachen()
 
     # ── Verbindung ───────────────────────────────────────────────────────
     def anmeldung(self) -> KnotenAnmeldung:
@@ -109,31 +184,43 @@ class Leitstellenkanal:
                                agent_version=__version__, messwege=self.messer.messwege(), durchleitung_port=e.durchleitung.port)
 
     async def _schleife(self, kanal: str, pause_max: float) -> None:
-        pause = 1.0
+        self._pause_s = 1.0
         while True:
+            await self._wach.wait()                          # schläft der Rechner, ruht die Verbindung bis zum Aufwachen
             self._setzen(Verbindung.VERBINDET)
             try:
                 await self._verbunden(kanal)
-                pause = 1.0
+                self._pause_s = 1.0
             except websockets.exceptions.InvalidStatus as f:
                 self._setzen(Verbindung.ABGEWIESEN, f"Leitstelle lehnt ab (Status {f.response.status_code})")
-                pause = pause_max
+                self._pause_s = pause_max
             except websockets.exceptions.ConnectionClosed as f:
                 grund = f.rcvd.reason if f.rcvd else ""
                 if grund in ("unbekannter_schluessel", "schluessel_erneuert"):
                     self._setzen(Verbindung.ABGEWIESEN, "Schlüssel unbekannt oder erneuert; neuen Schlüssel eintragen")
-                    pause = pause_max
+                    self._pause_s = pause_max
                 else:
                     self._setzen(Verbindung.NICHT_ERREICHBAR, f"Verbindung beendet{': ' + grund if grund else ''}")
             except (OSError, asyncio.TimeoutError, websockets.exceptions.InvalidURI) as f:
                 self._setzen(Verbindung.NICHT_ERREICHBAR, str(f)[:160])
+            if not self._wach.is_set():
+                self._setzen(Verbindung.SCHLAEFT, self.stand.meldung if self.stand.zustand == Verbindung.SCHLAEFT else "Rechner schläft")
+                continue                                     # eingeschlafen: kein Fehler, keine Pause
             log.warning("Leitstelle: %s %s", self.stand.zustand.value, self.stand.meldung)
-            await asyncio.sleep(pause)
-            pause = min(pause * 2, pause_max)
+            await self._pause(self._pause_s)
+            self._pause_s = min(self._pause_s * 2, pause_max)
+
+    async def _pause(self, s: float) -> None:
+        """Bis zum nächsten Versuch; das Aufwachen beendet die Pause sofort."""
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(self._unterbrechen.wait(), timeout=s)
+        self._unterbrechen.clear()
 
     async def _verbunden(self, kanal: str) -> None:
         kopf = {"Authorization": f"Bearer {self.ordner.schluessel() or ''}"}
         async with websockets.connect(kanal, additional_headers=kopf, open_timeout=10, ping_interval=20) as ws:
+            if not self._wach.is_set():
+                return                                       # während des Verbindens eingeschlafen
             await ws.send(_umschlag("knoten.anmelden", await asyncio.to_thread(self.anmeldung)))
             sperre = asyncio.Lock()
 
@@ -141,10 +228,12 @@ class Leitstellenkanal:
                 async with sperre:
                     await ws.send(text)
 
+            self._ws, self._senden = ws, senden
             empfang = asyncio.create_task(self._empfangen(ws, senden))
             try:
                 await self._senden_im_takt(senden, empfang)
             finally:
+                self._ws = self._senden = None
                 empfang.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await empfang
@@ -189,6 +278,9 @@ class Leitstellenkanal:
                 self.stand = self.stand.model_copy(update={"name": u.nutzlast.get("name")})
                 self._setzen(Verbindung.VERBUNDEN)
                 log.info("Bei der Leitstelle angemeldet als %s", u.nutzlast.get("name"))
+            elif u.art == "knoten.schlaf_vermerkt":
+                if (zukunft := self._vermerkt.get(u.bezug or "")) is not None and not zukunft.done():
+                    zukunft.set_result(None)
 
     async def _befehl(self, u: Umschlag, senden) -> None:
         try:

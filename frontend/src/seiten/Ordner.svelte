@@ -7,7 +7,7 @@
   const e = $derived(s.einstellungen);
   const pfade = $derived([
     ['Ordner', s.ordner, 'alles an einem Ort'],
-    ['Einstellungen', `${s.ordner}/einstellungen.toml`, 'Oberfläche, Durchleitung, Messung, Neustartregeln, Leitstelle'],
+    ['Einstellungen', `${s.ordner}/einstellungen.toml`, 'Oberfläche, Durchleitung, Messung, Neustartregeln, Schlaf, Leitstelle'],
     ['Dienste', `${s.ordner}/dienste/`, 'je KI-Dienst eine Datei; der Dateiname ist die Kennung'],
     ['Betrieb', `${s.ordner}/betrieb/`, 'Steuerprogramme wie das Stellwerk; tragen sich bei ihrer Installation ein'],
     ['Protokolle', `${s.ordner}/protokolle/`, 'Ausgabe des Maschinenraums und je Dienst eine Datei'],
@@ -38,6 +38,8 @@
           <dt>Messtakt</dt><dd><span class="zahl">{e.messung.takt_s}</span> s{e.messung.macmon ? ', mit Zusatzmessungen, wenn vorhanden' : ''}</dd>
           <dt>Neustart nach Absturz</dt><dd>Pausen <span class="zahl">{e.neustart.pausen_s.join(', ')}</span> s, höchstens <span class="zahl">{e.neustart.im_fenster}</span> in <span class="zahl">{e.neustart.fenster_s}</span> s</dd>
           <dt>Modell-Läufer</dt><dd class="zahl">{e.nachbar.modell_laeufer ?? 'keiner'}</dd>
+          <dt>Schlaf</dt><dd>{e.schlaf.melden ? 'der Leitstelle melden; Aufträge warten, bis der Rechner wach ist' : 'nicht melden'}
+            <small>{e.schlaf.leerlauf_aufschieben ? 'Kein Leerlaufschlaf, solange die Leitstelle hier rechnen lässt; Deckel, Menü und Ein-Taste wirken weiter' : 'Leerlaufschlaf wie eingestellt, auch mitten in einem Auftrag'}</small></dd>
         </dl>
       </section>
     </div>

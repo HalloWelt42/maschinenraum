@@ -37,7 +37,7 @@ export type Zustand = 'aus' | 'startet' | 'laeuft' | 'stoppt' | 'gestoert';
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Verbindung".
  */
-export type Verbindung = 'aus' | 'ohne_schluessel' | 'verbindet' | 'verbunden' | 'abgewiesen' | 'nicht_erreichbar';
+export type Verbindung = 'aus' | 'ohne_schluessel' | 'verbindet' | 'verbunden' | 'abgewiesen' | 'nicht_erreichbar' | 'schlaeft';
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Befehlsart".
@@ -84,6 +84,7 @@ export interface Einstellungen {
   messung: Messung;
   neustart: Neustartregeln;
   nachbar: Nachbar;
+  schlaf: Schlaf;
 }
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
@@ -166,6 +167,22 @@ export interface Nachbar {
    * Modell-Läufer auf diesem Rechner, nur zur Anzeige; leer: keiner
    */
   modell_laeufer: string | null;
+}
+/**
+ * Schlaf des Rechners (macOS): der Leitstelle melden und, solange sie über ihn rechnen lässt, aufschieben.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Schlaf".
+ */
+export interface Schlaf {
+  /**
+   * beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, bis der Rechner wach ist, statt zu scheitern
+   */
+  melden: boolean;
+  /**
+   * solange die Leitstelle über diesen Rechner rechnen lässt, schläft er nicht nach Leerlauf ein; Deckel, Menü und Ein-Taste wirken weiter
+   */
+  leerlauf_aufschieben: boolean;
 }
 /**
  * `knoten.messwerte`: im Takt des Agenten.

@@ -1,6 +1,6 @@
 """Der Ordner des Maschinenraums: ein Ort je Rechner für alles, was er verwaltet.
 
-    <ordner>/einstellungen.toml   Oberfläche, Messung, Neustartregeln, optional die Leitstelle
+    <ordner>/einstellungen.toml   Oberfläche, Messung, Neustartregeln, Schlaf, optional die Leitstelle
     <ordner>/schluessel           Schlüssel für die Leitstelle (nur für den Benutzer lesbar), wenn verbunden
     <ordner>/dienste/<name>.toml  je Dienst eine Datei; der Dateiname ist die Kennung
     <ordner>/betrieb/<name>.toml  Steuerprogramme des Rechners (etwa das Stellwerk): starten, anhalten, öffnen;
@@ -59,6 +59,15 @@ class Messung(BaseModel):
     macmon: bool = Field(default=True, description="Zusatzmessungen (Grafik, Temperatur, Leistung) über macmon, wenn vorhanden")
 
 
+class Schlaf(BaseModel):
+    """Schlaf des Rechners (macOS): der Leitstelle melden und, solange sie über ihn rechnen lässt, aufschieben."""
+
+    melden: bool = Field(default=True, description="beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, "
+                                                     "bis der Rechner wach ist, statt zu scheitern")
+    leerlauf_aufschieben: bool = Field(default=True, description="solange die Leitstelle über diesen Rechner rechnen lässt, schläft er "
+                                                                   "nicht nach Leerlauf ein; Deckel, Menü und Ein-Taste wirken weiter")
+
+
 class Nachbar(BaseModel):
     modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner, nur zur Anzeige; leer: keiner")
 
@@ -71,6 +80,7 @@ class Einstellungen(BaseModel):
     messung: Messung = Field(default_factory=Messung)
     neustart: Neustartregeln = Field(default_factory=Neustartregeln)
     nachbar: Nachbar = Field(default_factory=Nachbar)
+    schlaf: Schlaf = Field(default_factory=Schlaf)
 
 
 def _toml_wert(w: object) -> str:

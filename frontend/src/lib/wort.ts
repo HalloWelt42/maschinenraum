@@ -36,4 +36,5 @@ export const VERBINDUNG: Record<Verbindung, { wort: string; klasse: string; lage
   verbunden: { wort: 'Mit Leitstelle verbunden', klasse: 'fertig', lage: 'ruhig' },
   abgewiesen: { wort: 'Von der Leitstelle abgewiesen', klasse: 'fehler', lage: 'engpass' },
   nicht_erreichbar: { wort: 'Leitstelle nicht erreichbar', klasse: 'auslaufend', lage: 'angespannt' },
+  schlaeft: { wort: 'Rechner schläft', klasse: 'aus', lage: 'aus' },
 };

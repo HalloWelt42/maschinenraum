@@ -15,7 +15,7 @@
     {#if anteil != null}<span title="Belegter Speicher des ganzen Rechners (gemessen)"><i class="fa-solid fa-memory"></i>&nbsp; {s.rechner} <span class="zahl">{prozent(anteil)}</span> Speicher</span>{/if}
   {/if}
   <div class="rechts">
-    {#if s}<span title={s.leitstelle.meldung || VERBINDUNG[s.leitstelle.zustand].wort}><span class="punkt" class:gefahr={s.leitstelle.zustand !== 'verbunden' && s.leitstelle.zustand !== 'aus'} class:aus={s.leitstelle.zustand === 'aus'}></span>Leitstelle</span>{/if}
+    {#if s}<span title={s.leitstelle.meldung || VERBINDUNG[s.leitstelle.zustand].wort}><span class="punkt" class:gefahr={!['verbunden', 'aus', 'schlaeft'].includes(s.leitstelle.zustand)} class:aus={s.leitstelle.zustand === 'aus' || s.leitstelle.zustand === 'schlaeft'}></span>Leitstelle</span>{/if}
     <span title="Verbindung dieser Oberfläche zum Maschinenraum"><span class="punkt" class:lebt={lage.erreichbar} class:gefahr={!lage.erreichbar}></span>{lage.erreichbar ? 'Live' : 'Getrennt'}</span>
     {#if s}<span class="schwach zahl">{s.version}</span>{/if}
   </div>
