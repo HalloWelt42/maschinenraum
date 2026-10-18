@@ -45,10 +45,21 @@ export function nachOrtswechsel(): void {
   void tick().then(() => vielleichtNeuLaden('ortswechsel'));
 }
 
+/** Ob Fassung `a` neuer ist als `b` (Haupt-, Neben-, Fehlernummer). Läuft der Dienst noch mit einer älteren als die
+ *  ausgelieferte Oberfläche (eingespielt, aber noch nicht neu gestartet), gibt es nichts nachzuladen. */
+export function neuer(a: string, b: string): boolean {
+  const teile = (v: string) => v.split('.').map((x) => parseInt(x, 10) || 0);
+  const [x, y] = [teile(a), teile(b)];
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  }
+  return false;
+}
+
 export async function fassungPruefen(anlass: Anlass): Promise<void> {
   try {
     const { version } = await api.version();
-    fassung.neu = version !== OBERFLAECHE_FASSUNG ? version : null;
+    fassung.neu = neuer(version, OBERFLAECHE_FASSUNG) ? version : null;
   } catch {
     return; // ohne Verbindung meldet die Seite, dass der Maschinenraum nicht antwortet
   }
