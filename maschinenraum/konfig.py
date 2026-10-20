@@ -7,6 +7,9 @@
                                   keine KI, nie an die Leitstelle gemeldet. Das Programm trägt sich bei seiner Installation ein.
     <ordner>/protokolle/          Ausgabe des Maschinenraums und je Dienst eine Datei
     <ordner>/zustand.json         Sollzustand je Dienst (übersteht Neustarts) und gemessene Höchstwerte
+    <ordner>/modelle/             Modellablage des Rechners: alle Modelldateien der Dienste an einem Ort (nach Art geordnet,
+                                  dazu huggingface/ als Zwischenspeicher von Hugging Face); jeder Dienst findet sie über
+                                  $MASCHINENRAUM_MODELLE und HF_HUB_CACHE
 
 Die Einstellungsdatei schreibt der Maschinenraum selbst (die Oberfläche ändert sie); Dienstdateien schreibt
 der Mensch oder das Installationsskript eines Dienstes. Hier stehen nur KI-Dienste (mit Fähigkeiten); eigene Webapps
@@ -27,6 +30,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from .protokoll import Eignung, Faehigkeit
 
 STANDARD_ORDNER = "~/Maschinenraum"
+MODELLE_VARIABLE = "MASCHINENRAUM_MODELLE"
+HF_ORDNER = "huggingface"
 
 
 # ── Einstellungen ────────────────────────────────────────────────────────
@@ -178,6 +183,10 @@ class Ordner:
         return self.wurzel / "betrieb.json"
 
     @property
+    def modelle(self) -> Path:
+        return self.wurzel / "modelle"
+
+    @property
     def einstellungsdatei(self) -> Path:
         return self.wurzel / "einstellungen.toml"
 
@@ -186,7 +195,7 @@ class Ordner:
         return self.wurzel / "schluessel"
 
     def anlegen(self) -> None:
-        for o in (self.wurzel, self.dienste_ordner, self.protokolle, self.betrieb_ordner):
+        for o in (self.wurzel, self.dienste_ordner, self.protokolle, self.betrieb_ordner, self.modelle):
             o.mkdir(parents=True, exist_ok=True)
         self.wurzel.chmod(0o700)
         if not self.einstellungsdatei.exists():

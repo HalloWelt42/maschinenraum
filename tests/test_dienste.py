@@ -200,3 +200,19 @@ def test_instanzen_brauchen_den_port_im_befehl(tmp_path: Path):
     except ValueError as f:
         assert "MASCHINENRAUM_PORT" in str(f)
     assert DienstVorlage.model_validate({**grund, "befehl": ["dienst", "--port", "$MASCHINENRAUM_PORT"]}).instanzen == 2
+
+
+async def test_dienste_finden_die_modellablage(tmp_path: Path):
+    o = ordner_mit_dienst(tmp_path, freier_port(), umgebung='{ EIGEN = "$MASCHINENRAUM_MODELLE/bild" }')
+    v = verwalter(o)
+    await v.runde()
+    env = v.dienste["probe"]._umgebung()
+    assert env["MASCHINENRAUM_MODELLE"] == str(o.modelle) and env["HF_HUB_CACHE"] == str(o.modelle / "huggingface")
+    assert env["EIGEN"] == str(o.modelle / "bild")
+    assert "HF_HOME" not in env      # Anmeldedaten von Hugging Face bleiben, wo sie sind
+
+
+async def test_dienstdatei_geht_vor_der_ablage(tmp_path: Path):
+    v = verwalter(ordner_mit_dienst(tmp_path, freier_port(), umgebung='{ HF_HUB_CACHE = "/anderswo" }'))
+    await v.runde()
+    assert v.dienste["probe"]._umgebung()["HF_HUB_CACHE"] == "/anderswo"

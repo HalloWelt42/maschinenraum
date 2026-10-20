@@ -55,6 +55,7 @@ Dienst ein. Derselbe Befehl aktualisiert; Dienstdateien, Einstellungen und Sollz
 | `zustand.json` | Sollzustand je Dienst und gemessene Höchstwerte |
 | `betrieb/<kennung>.toml` | Steuerprogramme des Rechners (etwa das Stellwerk), von deren Installation eingetragen |
 | `betrieb.json` | Sollzustand der Steuerprogramme |
+| `modelle/` | Modellablage des Rechners: die Modelldateien aller Dienste an einem Ort (siehe unten) |
 | `schluessel` | Schlüssel für die Leitstelle, nur für den Benutzer lesbar; jeder Rechner braucht seinen eigenen (in der Leitstelle auf der Karte des Rechners ausgestellt). Einen Ordner mit Schlüssel auf einen zweiten Mac kopieren heißt: beide melden sich als derselbe Rechner und trennen sich gegenseitig |
 
 Neue oder geänderte Dienstdateien liest der Maschinenraum im nächsten Takt; ein Neustart ist nicht nötig. Stand
@@ -63,6 +64,20 @@ ohne Oberfläche:
 ```bash
 ~/Maschinenraum/.venv/bin/maschinenraum --liste
 ```
+
+## Modellablage
+
+Alle Modelle außerhalb des Modell-Läufers liegen an einem Ort, `modelle/` im Ordner des Maschinenraums, nach Art
+geordnet (`bild/`, `musik/`, `sprache/`) und mit `huggingface/` als Zwischenspeicher von Hugging Face. Jeder Dienst
+bekommt dafür zwei Variablen in seine Umgebung:
+
+| Variable | Wert |
+|---|---|
+| `MASCHINENRAUM_MODELLE` | der Ordner `modelle/`; in der Dienstdatei als `$MASCHINENRAUM_MODELLE` nutzbar |
+| `HF_HUB_CACHE` | `modelle/huggingface`: Modelle von Hugging Face landen hier statt in `~/.cache/huggingface` (Anmeldedaten bleiben dort) |
+
+Einträge unter `[umgebung]` in der Dienstdatei gehen vor. Programme, die nicht im Maschinenraum laufen, zeigen mit
+einer eigenen Einstellung auf denselben Ordner, damit kein Modell zweimal auf der Platte liegt.
 
 ## Dienstdatei
 

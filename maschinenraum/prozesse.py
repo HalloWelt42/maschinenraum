@@ -9,6 +9,7 @@ die Dienstdatei ihr erlaubt, und sieht Fähigkeiten und Speicherbedarf.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from dienstkern.dienst import Dienst
 from dienstkern.verwalter import Ergebnis, Neustartregeln
@@ -17,7 +18,7 @@ from dienstkern.zustand import Soll
 
 from dienstkern.vorlage import Ladefehler
 
-from .konfig import INSTANZ_PORT_ABSTAND, PORT_VARIABLE, DienstVorlage, Einstellungen, Ordner
+from .konfig import HF_ORDNER, INSTANZ_PORT_ABSTAND, MODELLE_VARIABLE, PORT_VARIABLE, DienstVorlage, Einstellungen, Ordner
 from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Dienstliste, ProzessBericht, Prozesszustand, Selbstauskunft
 
 __all__ = ["Soll", "Verwalter", "bericht"]
@@ -41,6 +42,14 @@ def mit_port(v: DienstVorlage, stufe: int = 1) -> DienstVorlage:
         aenderung |= {"kennung": f"{v.kennung}.{stufe}", "name": f"{v.name} ({stufe})", "port": port,
                       "pruefadresse": v.pruefadresse.replace(f":{v.port}", f":{port}") if v.pruefadresse else None}
     return v.model_copy(update=aenderung)
+
+
+def mit_ablage(v: DienstVorlage, modelle: Path) -> DienstVorlage:
+    """Jeder Dienst findet die Modellablage des Rechners: $MASCHINENRAUM_MODELLE und darin den Zwischenspeicher von Hugging
+    Face (nur die Modelle; Anmeldedaten bleiben im Benutzerordner). Einträge der Dienstdatei gehen vor und dürfen
+    $MASCHINENRAUM_MODELLE nutzen."""
+    ablage = {MODELLE_VARIABLE: str(modelle), "HF_HUB_CACHE": str(modelle / HF_ORDNER)}
+    return v.model_copy(update={"umgebung": {**ablage, **v.umgebung}})
 
 
 def bericht(d: Dienst) -> ProzessBericht:
@@ -70,6 +79,7 @@ class Verwalter(Kernverwalter):
     def _vorlagen(self) -> tuple[list[DienstVorlage], list[Ladefehler]]:
         """Die Dienstdateien und die weiteren Instanzen, abgeleitet aus der jeweils gültigen Datei (folgen ihr)."""
         vorlagen, fehler = self.ordner.dienste()
+        vorlagen = [mit_ablage(v, self.ordner.modelle) for v in vorlagen]
         gruende = {v.kennung: v for v in vorlagen}
         for k in list(self.weitere):
             grund, stufe = grund_und_stufe(k)
