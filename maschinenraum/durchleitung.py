@@ -1,9 +1,14 @@
-"""Durchleitung: der Weg der Leitstelle zu den Diensten dieses Rechners, wie bei einem Modell-Läufer.
+"""Durchleitung: der Weg der Leitstelle zu den Diensten dieses Rechners und zu seinem Modell-Läufer.
 
 Die Dienste lauschen nur auf diesem Rechner (127.0.0.1); niemand im Netz spricht sie direkt an. Die Leitstelle
 ruft `/<dienst>/<pfad>` mit ihrem Schlüssel als Bearer auf, der Maschinenraum reicht Anfrage und Antwort
 unverändert weiter (Körper und Antwort als Strom, ohne Lese-Zeitgrenze: Arbeit darf dauern). Ohne Schlüssel,
 mit falschem Schlüssel oder an einen Dienst, der nicht läuft, gibt es eine klare Absage mit Grundwort.
+
+`/laeufer/<pfad>` reicht an den Modell-Läufer dieses Rechners (Einstellung `nachbar.modell_laeufer`). Nimmt die
+Leitstelle diesen Weg, kommt jede ihrer Verbindungen zum Läufer vom Maschinenraum selbst; jede andere ist eine
+Umgehung, die die Beobachtung meldet. Der direkte Weg der Leitstelle zum Läufer bleibt davon unberührt (Rückfall per
+Hand in der Leitstelle).
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 
 from . import __version__
+from .konfig import LAEUFER
 
 log = logging.getLogger("maschinenraum")
 # Köpfe, die nur für eine Verbindung gelten oder die die Durchleitung selbst setzt
@@ -53,12 +59,16 @@ def erstellen(laufzeit) -> FastAPI:
     async def stand(request: Request):
         if not berechtigt(request):
             return _absage(401, "unbekannter_schluessel", "Nur die Leitstelle mit dem Schlüssel dieses Maschinenraums.")
-        return {"maschinenraum": __version__, "dienste": [d.kennung for d in laufzeit.verwalter.dienste.values()]}
+        return {"maschinenraum": __version__, "dienste": [d.kennung for d in laufzeit.verwalter.dienste.values()],
+                "laeufer": bool(laufzeit.verwalter.einstellungen.nachbar.modell_laeufer)}
 
-    @app.api_route("/{dienst}/{pfad:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-    async def weiterreichen(dienst: str, pfad: str, request: Request):
-        if not berechtigt(request):
-            return _absage(401, "unbekannter_schluessel", "Nur die Leitstelle mit dem Schlüssel dieses Maschinenraums.")
+    def ziel_des_laeufers() -> tuple[str, str] | JSONResponse:
+        basis = laufzeit.verwalter.einstellungen.nachbar.modell_laeufer
+        if not basis:
+            return _absage(404, "kein_laeufer", "Dieser Rechner hat keinen Modell-Läufer eingetragen (nachbar.modell_laeufer).")
+        return basis.rstrip("/"), "Modell-Läufer"
+
+    def ziel_des_dienstes(dienst: str) -> tuple[str, str] | JSONResponse:
         d = laufzeit.verwalter.dienste.get(dienst)
         if d is None:
             return _absage(404, "unbekannt", f"Diesen Dienst gibt es hier für die Leitstelle nicht: {dienst}")
@@ -66,14 +76,24 @@ def erstellen(laufzeit) -> FastAPI:
             return _absage(409, "ohne_port", f"{d.vorlage.name} hat keinen Port, an den man Anfragen richten kann.")
         if d.zustand != Zustand.LAEUFT:
             return _absage(409, "dienst_aus", f"{d.vorlage.name} läuft nicht ({d.zustand.value}).")
+        return f"http://127.0.0.1:{d.vorlage.port}", d.vorlage.name
+
+    @app.api_route("/{dienst}/{pfad:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+    async def weiterreichen(dienst: str, pfad: str, request: Request):
+        if not berechtigt(request):
+            return _absage(401, "unbekannter_schluessel", "Nur die Leitstelle mit dem Schlüssel dieses Maschinenraums.")
+        gefunden = ziel_des_laeufers() if dienst == LAEUFER else ziel_des_dienstes(dienst)
+        if isinstance(gefunden, JSONResponse):
+            return gefunden
+        basis, name = gefunden
         kopf = {k: v for k, v in request.headers.items() if k.lower() not in OHNE_KOPF}
-        ziel = httpx.URL(f"http://127.0.0.1:{d.vorlage.port}/{pfad}", query=request.url.query.encode())
+        ziel = httpx.URL(f"{basis}/{pfad}", query=request.url.query.encode())
         laufzeit.durchleitungen += 1          # gezählt bis die Antwort ganz durch ist (Neustart nur ohne laufende)
         try:
             antwort = await client.send(client.build_request(request.method, ziel, headers=kopf, content=request.stream()), stream=True)
         except httpx.HTTPError as f:
             laufzeit.durchleitungen -= 1
-            return _absage(502, "dienst_nicht_erreichbar", f"{d.vorlage.name}: {type(f).__name__} {f}".strip())
+            return _absage(502, "dienst_nicht_erreichbar", f"{name}: {type(f).__name__} {f}".strip())
 
         async def fertig() -> None:
             laufzeit.durchleitungen -= 1

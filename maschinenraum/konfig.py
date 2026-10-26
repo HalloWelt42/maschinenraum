@@ -73,8 +73,24 @@ class Schlaf(BaseModel):
                                                                    "nicht nach Leerlauf ein; Deckel, Menü und Ein-Taste wirken weiter")
 
 
+#: Weg der Durchleitung zum Modell-Läufer (`/laeufer/...`); kein Dienst darf so heißen
+LAEUFER = "laeufer"
+
+
 class Nachbar(BaseModel):
-    modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner, nur zur Anzeige; leer: keiner")
+    modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner: angezeigt, für die "
+                                       "Leitstelle unter /laeufer durchgereicht und auf fremde Zugriffe beobachtet; leer: keiner")
+
+
+class Beobachtung(BaseModel):
+    """Zugriffe am Leitstand vorbei melden: Verbindungen zum Modell-Läufer, die nicht über die Durchleitung kommen, und
+    Programme mit viel Speicher außerhalb von Diensten und Läufer (etwa ein Modell im eigenen Prozess)."""
+
+    aktiv: bool = Field(default=True, description="der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift")
+    schwelle_gb: float = Field(default=2.0, ge=0.5, le=512, description="ab so viel Speicher gilt ein Programm als möglicher Modellträger")
+    ausnahmen: list[str] = Field(default_factory=lambda: ["com.apple.Virtualization", "Google Chrome", "Brave Browser", "Safari.app", "firefox",
+                                                          "Xcode", "WindowServer", "Claude.app", "Code Helper", "JetBrains", "Docker"],
+                                 description="Teile der Befehlszeile, die nie als Speicherverbraucher gemeldet werden (Browser, virtuelle Maschinen)")
 
 
 class Einstellungen(BaseModel):
@@ -86,6 +102,7 @@ class Einstellungen(BaseModel):
     neustart: Neustartregeln = Field(default_factory=Neustartregeln)
     nachbar: Nachbar = Field(default_factory=Nachbar)
     schlaf: Schlaf = Field(default_factory=Schlaf)
+    beobachtung: Beobachtung = Field(default_factory=Beobachtung)
 
 
 def _toml_wert(w: object) -> str:
@@ -128,6 +145,12 @@ class DienstVorlage(Vorlage):
                            "läuft auf port + 100 (n-1), ihren Port nimmt der befehl als $MASCHINENRAUM_PORT")
     eignung: list[Eignung] = Field(default_factory=list, description="wofür er besonders taugt (denken, programmieren, lange_texte, schnell, gruendlich); geht mit der beschreibung als Selbstauskunft an die Leitstelle")
     sprachen: list[str] = Field(default_factory=list, description="Sprachen, die er kann (ISO 639-1, etwa de, en); leer heißt nicht angegeben")
+
+    @model_validator(mode="after")
+    def _kennung_frei(self) -> "DienstVorlage":
+        if self.kennung == LAEUFER:
+            raise ValueError(f"die Kennung {LAEUFER} gehört dem Weg zum Modell-Läufer; bitte die Datei umbenennen")
+        return self
 
     @model_validator(mode="after")
     def _instanzen_brauchen_port(self) -> "DienstVorlage":

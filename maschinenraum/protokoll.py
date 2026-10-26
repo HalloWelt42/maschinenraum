@@ -141,3 +141,29 @@ class KnotenSchlaeft(BaseModel):
 
     grund: Schlafgrund
     meldung: str = ""
+
+
+class Fremdart(str, Enum):
+    LAEUFER = "laeufer"               # Verbindung zum Modell-Läufer dieses Rechners, die nicht über den Maschinenraum geht
+    SPEICHER = "speicher"             # Programm mit viel Speicher, das weder Dienst noch Läufer ist (etwa ein Modell im eigenen Prozess)
+
+
+class Fremdzugriff(BaseModel):
+    """Ein Zugriff am Leitstand vorbei, so wie der Agent ihn sieht."""
+
+    art: Fremdart
+    wer: str                          # Programmname auf diesem Rechner oder Adresse im Netz
+    pid: int | None = None            # nur auf diesem Rechner
+    befehl: str = ""                  # Befehlszeile, gekürzt
+    ordner: str = ""                  # Arbeitsordner des Programms (verrät meist das Projekt)
+    verbindungen: int = 0             # bei laeufer: so viele offene Verbindungen
+    gb: float | None = None           # bei speicher: gemessener Speicher
+    vom_rechner_der_leitstelle: bool = False   # Adresse im Netz ist die des Rechners, auf dem die Leitstelle läuft
+
+
+class Fremdzugriffe(BaseModel):
+    """`knoten.fremde`: was am Leitstand vorbei auf Modelle dieses Rechners zugreift, im Takt der Messung; leer heißt
+    nichts gefunden. `beobachtet` ist falsch, wenn der Rechner das nicht messen kann (dann ist die Liste ohne Aussage)."""
+
+    beobachtet: bool = True
+    zugriffe: list[Fremdzugriff] = Field(default_factory=list)

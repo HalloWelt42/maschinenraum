@@ -23,7 +23,9 @@ Sprachmodell sind, etwa die Sprachdienste des [[Klangwerk]], Bilderzeugung und M
 Datei in `~/Maschinenraum/dienste/` (Befehl, Port, Fähigkeiten, Speicherbedarf); der Maschinenraum startet ihn in
 eigener Prozessgruppe, prüft, ob er antwortet, misst Speicher und Last, startet ihn nach einem Absturz begrenzt neu
 und hält ihn an. Als Knoten-Agent der [[Leitstelle]] meldet er den gemessenen Speicher des Macs und nimmt ihre
-Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er ihre Anfragen roh an die Dienste weiter.
+Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er ihre Anfragen roh an die Dienste und an
+den Modell-Läufer weiter. Er meldet ihr außerdem, was an ihr vorbei auf Modelle des Macs zugreift (fremde Verbindungen
+zum Läufer, große Speicherverbraucher außerhalb der Dienste).
 
 Ohne Maschinenraum hört und spricht im Verbund niemand: die Leitstelle kann die Sprachdienste am Mac weder starten
 noch erreichen.

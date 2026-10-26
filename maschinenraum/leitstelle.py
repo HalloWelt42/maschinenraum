@@ -28,6 +28,7 @@ from uuid import uuid4
 import websockets
 from pydantic import BaseModel, Field, ValidationError
 
+from .beobachtung import Beobachter
 from . import __version__
 from .konfig import Ordner
 from .messen import Messer
@@ -80,6 +81,7 @@ Senden = Callable[[str], Awaitable[None]]
 class Leitstellenkanal:
     def __init__(self, ordner: Ordner, verwalter: Verwalter, messer: Messer) -> None:
         self.ordner, self.verwalter, self.messer = ordner, verwalter, messer
+        self.beobachter = Beobachter(lambda: self.verwalter.einstellungen, lambda: self.verwalter.dienste.values())
         self.stand = LeitstellenStand(adresse=None, zustand=Verbindung.AUS)
         self._aufgabe: asyncio.Task | None = None
         self._ws: Any = None                         # die laufende Verbindung: Schlaf melden, beim Aufwachen schließen
@@ -244,6 +246,7 @@ class Leitstellenkanal:
         await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
         while not empfang.done():
             await senden(_umschlag("knoten.messwerte", await asyncio.to_thread(self.messer.messen)))
+            await senden(_umschlag("knoten.fremde", await asyncio.to_thread(self.beobachter.messen)))
             takt += 1
             if takt % DIENSTLISTE_SPAETESTENS == 0:
                 await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
