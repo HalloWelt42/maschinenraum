@@ -232,13 +232,15 @@ class Leitstellenkanal:
 
             self._ws, self._senden = ws, senden
             empfang = asyncio.create_task(self._empfangen(ws, senden))
+            beobachten = asyncio.create_task(self._beobachten_im_takt(senden))
             try:
                 await self._senden_im_takt(senden, empfang)
             finally:
                 self._ws = self._senden = None
-                empfang.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await empfang
+                for aufgabe in (empfang, beobachten):
+                    aufgabe.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await aufgabe
             empfang.result()                                 # Verbindungsfehler des Empfangs weiterreichen
 
     async def _senden_im_takt(self, senden, empfang: asyncio.Task) -> None:
@@ -246,7 +248,6 @@ class Leitstellenkanal:
         await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
         while not empfang.done():
             await senden(_umschlag("knoten.messwerte", await asyncio.to_thread(self.messer.messen)))
-            await senden(_umschlag("knoten.fremde", await asyncio.to_thread(self.beobachter.messen)))
             takt += 1
             if takt % DIENSTLISTE_SPAETESTENS == 0:
                 await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
@@ -254,6 +255,18 @@ class Leitstellenkanal:
                 await asyncio.wait_for(self._aenderung_abwarten(empfang), timeout=self.verwalter.einstellungen.messung.takt_s)
                 await senden(_umschlag("knoten.dienste", self.verwalter.liste()))
                 await asyncio.sleep(0.2)                     # mehrere Änderungen kurz hintereinander zusammenfassen
+
+    async def _beobachten_im_takt(self, senden) -> None:
+        """Zugriffe am Leitstand vorbei in eigenem, ruhigerem Takt: die Messung dauert (lsof) und darf Messwerte und
+        Dienstliste nicht aufhalten. Ein Fehler der Beobachtung trennt die Verbindung nicht."""
+        while True:
+            try:
+                await senden(_umschlag("knoten.fremde", await asyncio.to_thread(self.beobachter.messen)))
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("Beobachtung am Leitstand vorbei gescheitert")
+            await asyncio.sleep(self.verwalter.einstellungen.beobachtung.takt_s)
 
     async def _aenderung_abwarten(self, empfang: asyncio.Task) -> None:
         warten = asyncio.create_task(self.verwalter.aenderung.wait())

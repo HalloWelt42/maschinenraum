@@ -171,6 +171,7 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten, nur mit Schlüssel |
 | `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner: angezeigt, für die Leitstelle unter `/laeufer` durchgereicht, auf fremde Zugriffe beobachtet |
 | `beobachtung` | `aktiv` | ja | der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift |
+| `beobachtung` | `takt_s` | 15 | Abstand der Beobachtungen, eigener Takt neben den Messwerten |
 | `beobachtung` | `schwelle_gb` | 2 | ab so viel Speicher gilt ein Programm außerhalb von Diensten und Läufer als möglicher Modellträger |
 | `beobachtung` | `ausnahmen` | Browser, virtuelle Maschinen | Teile der Befehlszeile, die nie als Speicherverbraucher gemeldet werden |
 | `schlaf` | `melden` | ja | auf dem Mac: beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, bis er wach ist |
@@ -201,7 +202,7 @@ erhalten; welcher gilt, entscheidet ein Schalter am Läufer in der Leitstelle.
 
 ## Am Leitstand vorbei
 
-Im Takt der Messung meldet der Maschinenraum der Leitstelle (`knoten.fremde`), was an ihr vorbei auf Modelle dieses
+In eigenem Takt (`beobachtung.takt_s`) meldet der Maschinenraum der Leitstelle (`knoten.fremde`), was an ihr vorbei auf Modelle dieses
 Rechners zugreift:
 
 - Verbindungen zum Modell-Läufer, die nicht vom Maschinenraum kommen: ein Programm auf diesem Rechner mit Name,

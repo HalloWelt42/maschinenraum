@@ -87,6 +87,7 @@ class Beobachtung(BaseModel):
     Programme mit viel Speicher außerhalb von Diensten und Läufer (etwa ein Modell im eigenen Prozess)."""
 
     aktiv: bool = Field(default=True, description="der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift")
+    takt_s: float = Field(default=15, ge=5, le=600, description="Abstand der Beobachtungen; eigener Takt, weil eine Messung dauert")
     schwelle_gb: float = Field(default=2.0, ge=0.5, le=512, description="ab so viel Speicher gilt ein Programm als möglicher Modellträger")
     ausnahmen: list[str] = Field(default_factory=lambda: ["com.apple.Virtualization", "Google Chrome", "Brave Browser", "Safari.app", "firefox",
                                                           "Xcode", "WindowServer", "Claude.app", "Code Helper", "JetBrains", "Docker"],
