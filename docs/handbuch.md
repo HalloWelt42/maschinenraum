@@ -103,6 +103,9 @@ dauert aber Stunden. Zurückspielen: den Ordner an seinen Ort legen (Modus 700, 
 - Nach einer Installation reagiert nichts: `launchctl print gui/$(id -u)/maschinenraum` und
   `~/Maschinenraum/protokolle/start.log` ansehen.
 - Das Symbol fehlt in der Menüleiste: `swiftc` fehlte bei der Installation (Xcode), dann erneut installieren.
+- Nach einem Neustart des Maschinenraums laufen weitere Instanzen eines Dienstes (`<dienst>.2` und so weiter) weiter:
+  er findet sie über `zustand.json` und ihre Ports wieder und meldet sie der Leitstelle; was nicht mehr läuft, startet
+  er nicht neu.
 - Die Leitstelle zeigt beim Mac keine Läufer-Prozesse: `lsof` fehlt, kein Läufer eingetragen (`nachbar.modell_laeufer`)
   oder die Beobachtung ist aus (`beobachtung.aktiv`). Erkennt sie Arbeiter nicht, passen die Endungen in
   `beobachtung.modelldateien` nicht zu den Modelldateien des Läufers.

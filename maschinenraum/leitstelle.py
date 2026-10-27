@@ -262,9 +262,11 @@ class Leitstellenkanal:
 
     async def _beobachten_im_takt(self, senden) -> None:
         """Zugriffe am Leitstand vorbei und Last von Läufer und Rechner in eigenem, ruhigerem Takt: die Messung dauert
-        (lsof) und darf Messwerte und Dienstliste nicht aufhalten. Beide nutzen eine Aufnahme je Takt. Der Lastmesser gilt
-        je Verbindung (die erste Messung danach hat noch keine Prozente). Ein Fehler der Beobachtung trennt die Verbindung
-        nicht."""
+        (lsof) und darf Messwerte und Dienstliste nicht aufhalten. Beide nutzen eine Aufnahme je Takt. Gemessen wird erst,
+        wenn der Start alle laufenden Dienste übernommen hat; vorher hielte die Beobachtung sie für fremd. Der Lastmesser
+        gilt je Verbindung (die erste Messung danach hat noch keine Prozente). Ein Fehler der Beobachtung trennt die
+        Verbindung nicht."""
+        await self.verwalter.hochgefahren.wait()
         lastmesser = Lastmesser(lambda: self.verwalter.einstellungen)
         while True:
             try:

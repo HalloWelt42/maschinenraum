@@ -4,7 +4,9 @@ Maschinenraum dazutut: nur KI-Dienste, Berichte für die Leitstelle, Rechte der 
 
 from __future__ import annotations
 
+import asyncio
 import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -13,6 +15,8 @@ import pytest
 from maschinenraum.konfig import Leitstelle, Ordner
 from maschinenraum.messen import Messer, leistung_w, speicher, swap_mac
 from maschinenraum.protokoll import Befehl, Befehlsart, Faehigkeit, Prozesszustand
+from dienstkern.zustand import DienstStand
+
 from maschinenraum.prozesse import Soll, Verwalter
 
 
@@ -156,26 +160,29 @@ async def test_selbstauskunft_aus_der_dienstdatei(tmp_path: Path):
         assert "ISO 639-1" in str(f)
 
 
+def ordner_mit_instanzen(tmp: Path, instanzen: int = 2) -> tuple[Ordner, int]:
+    """Dienst probe mit mehreren Instanzen: Instanz n auf port + 100 (n-1), den Port nimmt der Befehl aus $MASCHINENRAUM_PORT."""
+    while True:
+        port = freier_port()
+        if port + 100 * (instanzen - 1) < 65536 and not any(offen(port + 100 * n) for n in range(1, instanzen)):
+            break
+    (tmp / "dienste").mkdir(parents=True, exist_ok=True)
+    (tmp / "einstellungen.toml").write_text('[messung]\ntakt_s = 1\nmacmon = false\n[neustart]\npausen_s = [0.2]\n')
+    instanzen_schreiben(tmp, port, instanzen)
+    return Ordner(tmp), port
+
+
+def instanzen_schreiben(tmp: Path, port: int, instanzen: int) -> None:
+    (tmp / "dienste" / "probe.toml").write_text(
+        f'name = "Probe"\nordner = "{tmp}"\nbefehl = ["{sys.executable}", "-m", "http.server", "$MASCHINENRAUM_PORT", "--bind", "127.0.0.1"]\n'
+        f'port = {port}\nfaehigkeiten = ["hoeren"]\nspeicher_gb = 0.5\nstartzeit_s = 15\nanhaltezeit_s = 5\ninstanzen = {instanzen}\n')
+
+
 async def test_weitere_instanz_auf_eigenem_port(tmp_path: Path):
     """Dienstdatei mit instanzen = 2: die Leitstelle startet die zweite Instanz (probe.2) auf port + 100, ihren Port
     bekommt der Befehl aus $MASCHINENRAUM_PORT; eine dritte gibt es nicht; angehalten ist die Instanz weg."""
-    from maschinenraum.protokoll import Befehl, Befehlsart
-
-    while True:
-        port = freier_port()
-        if port + 100 < 65536:
-            try:
-                with socket.socket() as s:
-                    s.bind(("127.0.0.1", port + 100))
-                break
-            except OSError:
-                continue
-    (tmp_path / "dienste").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "einstellungen.toml").write_text('[messung]\ntakt_s = 1\nmacmon = false\n[neustart]\npausen_s = [0.2]\n')
-    (tmp_path / "dienste" / "probe.toml").write_text(
-        f'name = "Probe"\nordner = "{tmp_path}"\nbefehl = ["{sys.executable}", "-m", "http.server", "$MASCHINENRAUM_PORT", "--bind", "127.0.0.1"]\n'
-        f'port = {port}\nfaehigkeiten = ["hoeren"]\nspeicher_gb = 0.5\nstartzeit_s = 15\nanhaltezeit_s = 5\ninstanzen = 2\n')
-    v = verwalter(Ordner(tmp_path))
+    o, port = ordner_mit_instanzen(tmp_path)
+    v = verwalter(o)
     await v.runde()
     e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe.2"), von_leitstelle=True)
     assert e.erfolg, e.meldung
@@ -189,6 +196,90 @@ async def test_weitere_instanz_auf_eigenem_port(tmp_path: Path):
     assert e.erfolg
     await v.runde()
     assert [x.kennung for x in v.liste().dienste] == ["probe"]
+
+
+async def _instanz_starten(o: Ordner) -> Verwalter:
+    v = verwalter(o)
+    await v.runde()
+    e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe.2"), von_leitstelle=True)
+    assert e.erfolg, e.meldung
+    return v
+
+
+async def test_weitere_instanz_nach_neustart_wiedergefunden(tmp_path: Path):
+    """Befund vom 27.10.2026: eine weitere Instanz (klangwerk-hoeren.2) lief nach dem Neustart des Maschinenraums sieben
+    Tage verwaist weiter; er kannte sie nicht mehr, meldete sie der Leitstelle nicht, und die Beobachtung zeigte sie als
+    fremd. Jetzt findet ein neuer Lauf sie über ihre Gruppe im Stand wieder, meldet sie und kann sie anhalten."""
+    o, port = ordner_mit_instanzen(tmp_path)
+    await _instanz_starten(o)
+    neu = verwalter(o)                                                        # derselbe Ordner: wie nach einem Neustart
+    assert not neu.hochgefahren.is_set()
+    await neu.hochfahren()
+    assert neu.hochgefahren.is_set()
+    b = next(x for x in neu.liste().dienste if x.kennung == "probe.2")
+    assert b.zustand == Prozesszustand.LAEUFT and b.instanz_von == "probe" and not b.fremd and b.gb_jetzt is not None
+    assert not offen(port)                                                    # die Grundinstanz soll nicht laufen: nicht gestartet
+    e = await neu.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe.2"), von_leitstelle=True)
+    assert e.erfolg and not offen(port + 100)
+
+
+async def test_weitere_instanz_ohne_stand_ueber_den_port_wiedergefunden(tmp_path: Path):
+    """Fehlt der Stand (etwa nach einem Rückspielen ohne zustand.json), findet der Port die Instanz, wie bei der Grundinstanz."""
+    o, port = ordner_mit_instanzen(tmp_path)
+    await _instanz_starten(o)
+    o.zustand_datei.unlink()
+    neu = verwalter(o)
+    await neu.hochfahren()
+    b = next(x for x in neu.liste().dienste if x.kennung == "probe.2")
+    assert b.zustand == Prozesszustand.LAEUFT and b.fremd
+    e = await neu.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe.2"), von_leitstelle=True)
+    assert e.erfolg and not offen(port + 100)
+
+
+async def test_weitere_instanz_die_nicht_mehr_laeuft_wird_vergessen(tmp_path: Path):
+    """Steht eine Instanz im Stand, läuft aber nicht mehr, startet der neue Lauf sie nicht von selbst (die Leitstelle
+    entscheidet über Instanzen) und vergisst sie."""
+    o, port = ordner_mit_instanzen(tmp_path)
+    v = await _instanz_starten(o)
+    assert (await v.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe.2"), von_leitstelle=True)).erfolg
+    v.stand.dienste["probe.2"].soll = Soll.LAEUFT                            # wie nach einem Absturz mit dem Rechner
+    v._stand_speichern()
+    neu = verwalter(o)
+    await neu.hochfahren()
+    await asyncio.sleep(0.5)
+    assert [x.kennung for x in neu.liste().dienste] == ["probe"] and not offen(port + 100)
+    assert "probe.2" not in neu.stand.dienste
+
+
+async def test_instanz_ueber_der_hoechstzahl_wird_beendet(tmp_path: Path):
+    """Die Höchstzahl der Dienstdatei sank, während der Maschinenraum aus war: die Instanz aus eigener Gruppe wird beendet."""
+    o, port = ordner_mit_instanzen(tmp_path)
+    await _instanz_starten(o)
+    instanzen_schreiben(tmp_path, port, 1)
+    neu = verwalter(o)
+    await neu.hochfahren()
+    assert not offen(port + 100) and [x.kennung for x in neu.liste().dienste] == ["probe"]
+    assert "probe.2" not in neu.stand.dienste
+
+
+async def test_fremdes_programm_auf_dem_port_einer_unerlaubten_stufe_bleibt(tmp_path: Path):
+    """Lauscht auf dem Port einer Stufe über der Höchstzahl ein Programm, das nicht nachweislich von hier stammt (keine
+    Gruppe im Stand), fasst der Maschinenraum es nicht an."""
+    o, port = ordner_mit_instanzen(tmp_path, instanzen=1)
+    fremd = subprocess.Popen([sys.executable, "-m", "http.server", str(port + 100), "--bind", "127.0.0.1"], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(100):
+            if offen(port + 100):
+                break
+            await asyncio.sleep(0.1)
+        neu = verwalter(o)
+        neu.stand.dienste["probe.2"] = DienstStand(soll=Soll.LAEUFT)        # Rest eines früheren Laufs ohne Gruppe
+        await neu.hochfahren()
+        assert offen(port + 100) and fremd.poll() is None and [x.kennung for x in neu.liste().dienste] == ["probe"]
+    finally:
+        fremd.terminate()
+        fremd.wait()
 
 
 def test_instanzen_brauchen_den_port_im_befehl(tmp_path: Path):

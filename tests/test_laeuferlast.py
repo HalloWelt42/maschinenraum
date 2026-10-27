@@ -4,6 +4,7 @@ ersetzt und schlägt fehl, wenn ein Test es nicht ausdrücklich erwartet."""
 
 from __future__ import annotations
 
+import asyncio
 import itertools
 import json
 import os
@@ -291,3 +292,31 @@ async def test_befehl_der_leitstelle_geht_an_die_aufsicht(tmp_path: Path):
     await kanal._befehl(u, senden)
     assert gerufen == ["808"]
     assert gesendet[0]["art"] == "knoten.befehl_ergebnis" and gesendet[0]["bezug"] == u.id and gesendet[0]["nutzlast"]["erfolg"]
+
+
+async def test_beobachtung_misst_erst_nach_der_uebernahme(tmp_path: Path):
+    """Befund vom 27.10.2026: direkt nach dem Neustart meldete die Beobachtung eigene Dienste als Speicher am Leitstand
+    vorbei, eine Messung später als nicht mehr gesehen; sie hatte gemessen, bevor die Dienste übernommen waren. Jetzt
+    misst sie erst, wenn der Start alles Laufende übernommen hat."""
+    o = Ordner(tmp_path)
+    o.anlegen()
+    kanal = Leitstellenkanal(o, Verwalter(o, o.einstellungen()), ScheinMesser())
+    aufnahmen: list[int] = []
+    kanal.beobachter.aufnehmen = lambda: aufnahmen.append(1)                 # type: ignore[method-assign]
+    gesendet: list[str] = []
+
+    async def senden(text: str) -> None:
+        gesendet.append(json.loads(text)["art"])
+    aufgabe = asyncio.create_task(kanal._beobachten_im_takt(senden))
+    try:
+        await asyncio.sleep(0.3)
+        assert aufnahmen == [] and gesendet == []
+        await kanal.verwalter.hochfahren()
+        for _ in range(50):
+            if gesendet:
+                break
+            await asyncio.sleep(0.05)
+        assert aufnahmen == [1] and gesendet == ["knoten.fremde", "knoten.last"]
+    finally:
+        aufgabe.cancel()
+        await asyncio.gather(aufgabe, return_exceptions=True)

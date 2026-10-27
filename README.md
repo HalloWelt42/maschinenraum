@@ -98,7 +98,7 @@ werden mit einer lesbaren Meldung übergangen.
 | `eignung` | leer | wofür er besonders taugt, Wörter aus `denken`, `programmieren`, `lange_texte`, `schnell`, `gruendlich` (Selbstauskunft) |
 | `sprachen` | leer | Sprachen, die er kann, als Kürzel nach ISO 639-1 (`de`, `en`); leer heißt nicht angegeben (Selbstauskunft) |
 | `plaetze` | 1 | so viele Anfragen nimmt er gleichzeitig an; die Leitstelle teilt danach zu |
-| `instanzen` | 1 | so viele Prozesse darf die Leitstelle bei Andrang starten; Instanz n heißt `<kennung>.<n>`, läuft auf `port + 100 (n-1)` und bekommt ihren Port in `MASCHINENRAUM_PORT` (im `befehl` als `$MASCHINENRAUM_PORT`, Pflicht ab 2). Weitere Instanzen leben nur im Speicher und folgen der Datei; angehalten sind sie weg |
+| `instanzen` | 1 | so viele Prozesse darf die Leitstelle bei Andrang starten; Instanz n heißt `<kennung>.<n>`, läuft auf `port + 100 (n-1)` und bekommt ihren Port in `MASCHINENRAUM_PORT` (im `befehl` als `$MASCHINENRAUM_PORT`, Pflicht ab 2). Weitere Instanzen folgen der Datei; angehalten sind sie weg, nach einem Neustart des Maschinenraums werden laufende wiedergefunden (siehe unten) |
 | `speicher_gb` | 1 | Schätzung, bis der Maschinenraum den Dienst gemessen hat |
 | `startzeit_s` | 120 | so lange darf der Start bis zur Erreichbarkeit dauern |
 | `anhaltezeit_s` | 20 | so lange darf das Beenden dauern, danach hart |
@@ -146,6 +146,13 @@ nutzen, laufen nativ; Container haben dort keinen Zugriff auf die Grafik.
 Läuft ein Dienst schon, ohne vom Maschinenraum gestartet zu sein (sein Port antwortet), übernimmt er ihn:
 er misst ihn und kann ihn anhalten (den lauschenden Prozess und dessen Nachfahren), startet ihn aber nicht
 doppelt. Der nächste Start geschieht dann durch den Maschinenraum.
+
+Weitere Instanzen (`<kennung>.<n>`) startet die Leitstelle; welche laufen, steht im Sollzustand (`zustand.json`, mit
+Prozessgruppe) und an ihren Ports. Beim Start findet der Maschinenraum sie dort wieder: was noch läuft, übernimmt er
+(eigene Gruppe, sonst Port, wie bei der Grundinstanz) und meldet es der Leitstelle; was nicht mehr läuft, vergisst er,
+ohne es neu zu starten (die Leitstelle startet bei Bedarf); was über der Höchstzahl der Dienstdatei läuft und
+nachweislich von ihm stammt (eigene Gruppe), beendet er. Ein fremdes Programm auf dem Port einer solchen Stufe bleibt
+unberührt. Erst wenn alles Laufende übernommen ist, beginnt die Beobachtung; vorher hielte sie eigene Dienste für fremd.
 
 
 ## Speicherbedarf
