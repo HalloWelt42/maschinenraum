@@ -1,7 +1,8 @@
-// Menüleistensymbol des Maschinenraums: das zentrale Steuerwerk dieses Rechners.
-// Oben die KI-Dienste (Maschinenraum), darunter der Betrieb: Steuerprogramme wie das Stellwerk (starten, anhalten,
-// öffnen) und dessen Webapps mit Schaltern, dazu der Weg zur Leitstelle.
-// Es verwaltet selbst nichts: KI-Dienste und Steuerprogramme schaltet der Maschinenraum, Webapps das Stellwerk.
+// Menüleistensymbol des Maschinenraums: zeigt die KI-Dienste dieses Rechners mit Zustand und Speicher und öffnet die
+// Weboberflächen (Maschinenraum, Steuerprogramme wie das Stellwerk, Leitstelle). Es schaltet nichts: KI-Dienste
+// startet und hält der Maschinenraum (Oberfläche, Leitstelle), Apps das Stellwerk in seiner eigenen Oberfläche.
+// Jeder Knopf trägt den Namen, den die Oberfläche in ihrem Manifest selbst nennt (Name mit Kurzzweck, etwa
+// "Leitstelle · KI-Vermittlung"); bis das Manifest gelesen ist oder wenn es fehlt, den bekannten Namen.
 
 import AppKit
 import SwiftUI
@@ -24,16 +25,18 @@ struct Dienst: Decodable, Identifiable {
     var laeuft: Bool { zustand == "laeuft" || zustand == "startet" || zustand == "stoppt" }
 }
 
-struct Leitstelle: Decodable { let zustand: String; let adresse: String? }
+struct Leitstelle: Decodable { let adresse: String? }
 
+// Steuerprogramm des Rechners (etwa das Stellwerk); hier nur, um seine Oberfläche zu öffnen, solange es läuft
 struct Steuerprogramm: Decodable, Identifiable {
     let kennung: String
     let name: String
     let zustand: String
     let oberflaeche: String?
     var id: String { kennung }
-    var laeuft: Bool { zustand == "laeuft" || zustand == "startet" || zustand == "stoppt" }
 }
+
+struct Manifest: Decodable { let name: String }
 
 struct Stand: Decodable {
     let rechner: String
@@ -43,27 +46,16 @@ struct Stand: Decodable {
     let leitstelle: Leitstelle
 }
 
-// Webapps eines Steuerprogramms, das welche führt (das Stellwerk); andere Programme liefern keine
-struct Webapp: Decodable, Identifiable {
-    let kennung: String
-    let name: String
-    let zustand: String
-    let oberflaeche: String?
-    let gb_jetzt: Double?
-    var id: String { kennung }
-    var an: Bool { zustand != "aus" && zustand != "gestoert" }
-}
-
-struct Webapps: Decodable { let apps: [Webapp] }
-
 @MainActor
 final class Modell: ObservableObject {
     @Published var stand: Stand?
     @Published var erreichbar = true
-    @Published var arbeitet: Set<String> = []
-    @Published var webapps: [String: [Webapp]] = [:]      // je Steuerprogramm seine Webapps
+    @Published var namen: [String: String] = [:]          // Adresse einer Oberfläche -> Name aus ihrem Manifest
     let basis: URL
     private var zeitgeber: Timer?
+    private var namenGelesen = Date.distantPast
+    private var namenFuer: [String] = []                   // die Adressen beim letzten Lesen der Manifeste
+    private let namenAbstand: TimeInterval = 60           // so oft werden die Manifeste neu gelesen, sonst bei neuen Adressen
 
     init() {
         let port = Bundle.main.object(forInfoDictionaryKey: "MaschinenraumPort") as? Int ?? 8540
@@ -82,67 +74,33 @@ final class Modell: ObservableObject {
         } catch {
             erreichbar = false
         }
-        await webappsHolen()
+        let adressen = [basis.absoluteString] + oberflaechen.map(\.adresse) + [stand?.leitstelle.adresse].compactMap { $0 }
+        if adressen != namenFuer || Date().timeIntervalSince(namenGelesen) >= namenAbstand {
+            namenFuer = adressen
+            namenGelesen = Date()
+            await namenHolen(adressen)
+        }
     }
 
-    func webappsHolen() async {
-        var neu: [String: [Webapp]] = [:]
-        for p in stand?.betrieb ?? [] where p.laeuft {
-            guard let o = p.oberflaeche, let url = URL(string: o)?.appendingPathComponent("api/stand") else { continue }
-            if let (daten, _) = try? await URLSession.shared.data(from: url), let w = try? JSONDecoder().decode(Webapps.self, from: daten) {
-                neu[p.kennung] = w.apps
+    // Name jeder Oberfläche aus ihrem Manifest (site.webmanifest); eine, die nicht antwortet, behält den letzten
+    func namenHolen(_ adressen: [String]) async {
+        for a in adressen {
+            guard let url = URL(string: a)?.appendingPathComponent("site.webmanifest") else { continue }
+            if let (daten, _) = try? await URLSession.shared.data(from: url), let m = try? JSONDecoder().decode(Manifest.self, from: daten) {
+                namen[a] = m.name
             }
         }
-        webapps = neu
     }
 
-    private func senden(_ url: URL, kopf: String) async {
-        var anfrage = URLRequest(url: url)
-        anfrage.httpMethod = "POST"
-        anfrage.timeoutInterval = 900
-        anfrage.setValue("1", forHTTPHeaderField: kopf)
-        _ = try? await URLSession.shared.data(for: anfrage)
-    }
+    func name(_ adresse: String, sonst: String) -> String { namen[adresse] ?? sonst }
 
-    func schalten(_ p: Steuerprogramm) async {
-        arbeitet.insert("betrieb:" + p.kennung)
-        await senden(basis.appendingPathComponent("api/betrieb/\(p.kennung)/\(p.laeuft ? "anhalten" : "starten")"), kopf: "X-Maschinenraum")
-        arbeitet.remove("betrieb:" + p.kennung)
-        await holen()
-    }
-
-    func schalten(_ a: Webapp, bei p: Steuerprogramm) async {
-        guard let o = p.oberflaeche, let url = URL(string: o) else { return }
-        arbeitet.insert("app:" + a.kennung)
-        await senden(url.appendingPathComponent("api/apps/\(a.kennung)/\(a.an ? "anhalten" : "starten")"), kopf: "X-Stellwerk")
-        arbeitet.remove("app:" + a.kennung)
-        await holen()
+    // Oberflächen der Steuerprogramme, die gerade laufen
+    var oberflaechen: [(name: String, adresse: String)] {
+        (stand?.betrieb ?? []).compactMap { p in p.zustand == "laeuft" ? p.oberflaeche.map { (p.name, $0) } : nil }
     }
 
     func oeffnen(_ adresse: String) {
         if let url = URL(string: adresse) { NSWorkspace.shared.open(url) }
-    }
-
-    func schalten(_ d: Dienst) async {
-        arbeitet.insert(d.kennung)
-        var anfrage = URLRequest(url: basis.appendingPathComponent("api/dienste/\(d.kennung)/\(d.laeuft ? "anhalten" : "starten")"))
-        anfrage.httpMethod = "POST"
-        anfrage.setValue("1", forHTTPHeaderField: "X-Maschinenraum")
-        _ = try? await URLSession.shared.data(for: anfrage)
-        arbeitet.remove(d.kennung)
-        await holen()
-    }
-
-    func oeffnen() { NSWorkspace.shared.open(basis) }
-
-}
-
-func farbe(_ zustand: String) -> Color {
-    switch zustand {
-    case "gestoert": return .red
-    case "laeuft": return .green
-    case "aus": return .gray.opacity(0.5)
-    default: return .orange
     }
 }
 
@@ -156,7 +114,7 @@ struct Ansicht: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Maschinenraum").font(.headline)
+                Text(modell.name(modell.basis.absoluteString, sonst: "Maschinenraum")).font(.headline)
                 Spacer()
                 if let s = modell.stand { Text(s.rechner).foregroundStyle(.secondary) }
             }
@@ -182,62 +140,23 @@ struct Ansicht: View {
                         Spacer()
                         if d.aktiv { Image(systemName: "gearshape.fill").foregroundStyle(.orange).help("arbeitet gerade") }
                         if let jetzt = d.gb_jetzt { Text(gb(jetzt)).monospacedDigit().foregroundStyle(.secondary).help("Bedarf \(gb(d.bedarf_gb))") }
-                        if modell.arbeitet.contains(d.kennung) {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Toggle("", isOn: Binding(get: { d.laeuft }, set: { _ in Task { await modell.schalten(d) } }))
-                                .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                        }
                     }
                 }
             } else {
                 Text("Keine KI-Dienste eingetragen.").foregroundStyle(.secondary)
             }
-            if let programme = modell.stand?.betrieb, !programme.isEmpty {
-                Divider()
-                Text("Betrieb").font(.caption).foregroundStyle(.secondary)
-                ForEach(programme) { p in
-                    HStack(spacing: 8) {
-                        Circle().fill(farbe(p.zustand)).frame(width: 9, height: 9)
-                        Text(p.name).lineLimit(1)
-                        Spacer()
-                        if let o = p.oberflaeche, p.laeuft {
-                            Button { modell.oeffnen(o) } label: { Image(systemName: "arrow.up.right.square") }
-                                .buttonStyle(.borderless).help("\(p.name) öffnen")
-                        }
-                        if modell.arbeitet.contains("betrieb:" + p.kennung) {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Toggle("", isOn: Binding(get: { p.laeuft }, set: { _ in Task { await modell.schalten(p) } }))
-                                .toggleStyle(.switch).labelsHidden().controlSize(.small)
-                        }
-                    }
-                    ForEach(modell.webapps[p.kennung] ?? []) { a in
-                        HStack(spacing: 8) {
-                            Circle().fill(farbe(a.zustand)).frame(width: 7, height: 7)
-                            Text(a.name).lineLimit(1)
-                            Spacer()
-                            if let jetzt = a.gb_jetzt { Text(gb(jetzt)).monospacedDigit().foregroundStyle(.secondary) }
-                            if let o = a.oberflaeche, a.zustand == "laeuft" {
-                                Button { modell.oeffnen(o) } label: { Image(systemName: "arrow.up.right.square") }
-                                    .buttonStyle(.borderless).help("\(a.name) im Browser öffnen")
-                            }
-                            if modell.arbeitet.contains("app:" + a.kennung) {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Toggle("", isOn: Binding(get: { a.an }, set: { _ in Task { await modell.schalten(a, bei: p) } }))
-                                    .toggleStyle(.switch).labelsHidden().controlSize(.mini)
-                            }
-                        }.padding(.leading, 17)
-                    }
+            Divider()
+            // Je Oberfläche ein Knopf in eigener Zeile: Name und Kurzzweck sind zu lang für eine Reihe
+            VStack(alignment: .leading, spacing: 6) {
+                oeffnenKnopf(modell.basis.absoluteString, sonst: "Maschinenraum", hilfe: "Weboberfläche des Maschinenraums öffnen: KI-Dienste starten, anhalten, Protokolle")
+                ForEach(modell.oberflaechen, id: \.adresse) { o in
+                    oeffnenKnopf(o.adresse, sonst: o.name, hilfe: "Weboberfläche von \(o.name) öffnen")
+                }
+                if let adresse = modell.stand?.leitstelle.adresse {
+                    oeffnenKnopf(adresse, sonst: "Leitstelle", hilfe: "Leitstelle öffnen: zentrale Steuerung und Überwachung")
                 }
             }
-            Divider()
             HStack {
-                Button("Oberfläche öffnen") { modell.oeffnen() }
-                if let adresse = modell.stand?.leitstelle.adresse {
-                    Button("Leitstelle") { modell.oeffnen(adresse) }.help("Leitstelle öffnen: verteilt die Aufträge an die KI")
-                }
                 Spacer()
                 Button("Symbol beenden") { NSApplication.shared.terminate(nil) }
                     .help("Beendet nur dieses Symbol; Maschinenraum, Stellwerk und alle Dienste laufen weiter")
@@ -245,6 +164,11 @@ struct Ansicht: View {
         }
         .padding(14)
         .frame(width: 340)
+    }
+
+    func oeffnenKnopf(_ adresse: String, sonst: String, hilfe: String) -> some View {
+        Button { modell.oeffnen(adresse) } label: { Label(modell.name(adresse, sonst: sonst), systemImage: "arrow.up.right.square") }
+            .buttonStyle(.borderless).help(hilfe)
     }
 }
 

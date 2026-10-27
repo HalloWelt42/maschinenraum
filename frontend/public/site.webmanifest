@@ -1,6 +1,4 @@
 {
-  "name": "Maschinenraum",
-  "short_name": "Maschinenraum",
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#161413",

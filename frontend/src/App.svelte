@@ -22,7 +22,8 @@
   const s = $derived(lage.stand);
 
   $effect(() => {
-    document.title = s ? `Maschinenraum ${s.rechner}` : 'Maschinenraum';
+    const titel = `${__MARKE__.name} · ${__MARKE__.zweck}`;
+    document.title = s ? `${titel} ${s.rechner}` : titel;
   });
 </script>
 

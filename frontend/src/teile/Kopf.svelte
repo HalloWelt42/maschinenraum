@@ -11,10 +11,10 @@
 <header class="kopf">
   <div class="marke">
     <img class="marke-bild" src="/symbol.svg" alt="" />
-    <span class="marke-name">Maschinenraum</span>
+    <span class="marke-name">{__MARKE__.name}</span>
+    <span class="marke-zweck" title="Startet, misst und hält die KI-Dienste dieses Rechners"><span aria-hidden="true">·</span> {__MARKE__.zweck}</span>
     {#if s}<span class="zahl">{s.version}</span>{/if}
   </div>
-  <span class="rolle" title="Leitstelle verteilt Aufträge, Maschinenraum regelt KI, Stellwerk startet Anwendungen"><i class="fa-solid fa-industry"></i>regelt KI</span>
   {#if s}<span class="rechner" title="Dieser Rechner"><i class="fa-solid fa-desktop"></i>{s.rechner}</span>{/if}
 
   <div class="kopf-aktionen">

@@ -11,7 +11,7 @@ schluessel_orte:
   - "Mac: `~/Maschinenraum/schluessel`, Modus 0600: Schlüssel des Knotens bei der Leitstelle, zugleich Zugang der Durchleitung"
   - "Leitstelle: das Gegenstück unter Knoten (im Tresor der Leitstelle)"
 einrichten: einrichten.sh
-stand: 33d0073
+stand: d1c0cda
 ---
 
 # Maschinenraum
@@ -35,9 +35,10 @@ Ohne Maschinenraum hört und spricht im Verbund niemand: die Leitstelle kann die
 noch erreichen.
 
 Er läuft als launchd-Dienst `maschinenraum` mit Oberfläche im Browser (nur dieser Rechner, Vorgabe Port 8540) und
-Durchleitung für die Leitstelle (im Netz, Vorgabe Port 8541); dazu ein Symbol in der Menüleiste, das auch das
-[[Stellwerk]] zeigt. Die Ports stehen als Vorgabe in `maschinenraum/konfig.py` und lassen sich in
-`einstellungen.toml` ändern.
+Durchleitung für die Leitstelle (im Netz, Vorgabe Port 8541); dazu ein Symbol in der Menüleiste, das die KI-Dienste
+mit Zustand und Speicher zeigt und die Oberflächen von Maschinenraum, [[Stellwerk]] und [[Leitstelle]] öffnet (es
+schaltet nichts). In Kopfzeile und Tab-Titel heißt er "Maschinenraum · KI-Dienste". Die Ports stehen als Vorgabe in
+`maschinenraum/konfig.py` und lassen sich in `einstellungen.toml` ändern.
 
 ## Was sie braucht
 

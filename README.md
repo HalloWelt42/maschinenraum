@@ -10,8 +10,9 @@ Datenbanken und Docker verwaltet das [Stellwerk](https://github.com/HalloWelt42/
 Leitstelle.
 
 - **Oberfläche im Browser** unter `http://127.0.0.1:8540/`, nur auf diesem Rechner erreichbar.
-- **Menüleistensymbol** auf dem Mac, das zentrale Steuerwerk des Rechners: KI-Dienste mit Schaltern, Speicher, darunter
-  der Betrieb (Stellwerk starten, anhalten, öffnen und seine Webapps schalten) und der Weg zur Leitstelle.
+- **Menüleistensymbol** auf dem Mac: zeigt die KI-Dienste mit Zustand und Speicher und öffnet die Weboberflächen von
+  Maschinenraum, Stellwerk und Leitstelle. Geschaltet wird dort, nicht im Symbol: KI-Dienste in der Oberfläche des
+  Maschinenraums (oder von der Leitstelle), die Apps allein im Stellwerk.
 - **Übersteht Neustarts:** läuft als launchd- oder systemd-Dienst; was laufen soll, startet wieder.
 - **Abstürze** werden mit Pausen neu gestartet; stürzt ein Dienst zu oft ab, bleibt er aus.
 - **Optional mit Leitstelle:** eine Leitstelle im Netz kann die Dienste mit einplanen, starten und anhalten
@@ -34,6 +35,12 @@ Webapps (Stellwerk)  ->  Leitstelle  ->  Modell-Läufer      (Sprachmodelle)
 
 Starten, Anhalten, Abhängigkeiten, Neustarts, Sollzustand und Prozessmessung teilen sich Maschinenraum und Stellwerk
 über den [Dienstkern](https://github.com/HalloWelt42/dienstkern).
+
+Weil die Namen ähnlich klingen, steht neben jedem Namen ein Kurzzweck: Maschinenraum · KI-Dienste, Stellwerk ·
+App-Steuerung, Leitstelle · KI-Vermittlung. Beim Maschinenraum stehen Name und Kurzzweck an einer Stelle,
+`frontend/marke.ts`; Kopfzeile, Tab-Titel und Manifest der installierten Web-App lesen sie dort. Das Menüleistensymbol
+beschriftet jeden Knopf zum Öffnen mit dem Namen, den die Oberfläche in ihrem Manifest (`site.webmanifest`) selbst
+nennt, bis dahin mit dem bekannten Namen.
 
 ## Installieren
 
@@ -130,8 +137,8 @@ Neben den KI-Diensten startet, hält an und öffnet der Maschinenraum die Steuer
 [Stellwerk](https://github.com/HalloWelt42/stellwerk), das die eigenen Webapps startet. Ein Steuerprogramm trägt sich
 bei seiner Installation unter `betrieb/` ein (Felder wie eine Dienstdatei, ohne Fähigkeiten; meist `steuerung =
 "befehle"` mit dem Start- und Anhaltebefehl des Systemdienstes). Steuerprogramme sind keine KI: die Leitstelle sieht
-sie nie. Im Menüleistensymbol stehen sie unter Betrieb, mit den Webapps des Stellwerks darunter; geschaltet werden
-die Webapps beim Stellwerk selbst.
+sie nie. Im Menüleistensymbol hat jedes laufende Steuerprogramm mit Oberfläche einen Knopf zum Öffnen; geschaltet
+werden Steuerprogramme in der Oberfläche des Maschinenraums, die Apps allein im Stellwerk.
 
 | Aufruf | Wirkung |
 |---|---|
