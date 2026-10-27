@@ -73,18 +73,14 @@ class Schlaf(BaseModel):
                                                                    "nicht nach Leerlauf ein; Deckel, Menü und Ein-Taste wirken weiter")
 
 
-#: Weg der Durchleitung zum Modell-Läufer (`/laeufer/...`); kein Dienst darf so heißen
-LAEUFER = "laeufer"
-
-
 class Nachbar(BaseModel):
-    modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner: angezeigt, für die "
-                                       "Leitstelle unter /laeufer durchgereicht und auf fremde Zugriffe beobachtet; leer: keiner")
+    modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner: angezeigt und "
+                                       "beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse); leer: keiner")
 
 
 class Beobachtung(BaseModel):
     """Was die Leitstelle über diesen Rechner zum Entscheiden braucht, im eigenen Takt: Zugriffe am Leitstand vorbei
-    (Verbindungen zum Modell-Läufer, die nicht über die Durchleitung kommen, und Programme mit viel Speicher außerhalb von
+    (Verbindungen zum Modell-Läufer, die nicht vom Maschinenraum selbst kommen, und Programme mit viel Speicher außerhalb von
     Diensten und Läufer) und die Last (je Prozess des Läufers und die Fremdlast des Rechners). Dazu, woran ein Arbeiter des
     Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird."""
 
@@ -163,12 +159,6 @@ class DienstVorlage(Vorlage):
                            "läuft auf port + 100 (n-1), ihren Port nimmt der befehl als $MASCHINENRAUM_PORT")
     eignung: list[Eignung] = Field(default_factory=list, description="wofür er besonders taugt (denken, programmieren, lange_texte, schnell, gruendlich); geht mit der beschreibung als Selbstauskunft an die Leitstelle")
     sprachen: list[str] = Field(default_factory=list, description="Sprachen, die er kann (ISO 639-1, etwa de, en); leer heißt nicht angegeben")
-
-    @model_validator(mode="after")
-    def _kennung_frei(self) -> "DienstVorlage":
-        if self.kennung == LAEUFER:
-            raise ValueError(f"die Kennung {LAEUFER} gehört dem Weg zum Modell-Läufer; bitte die Datei umbenennen")
-        return self
 
     @model_validator(mode="after")
     def _instanzen_brauchen_port(self) -> "DienstVorlage":

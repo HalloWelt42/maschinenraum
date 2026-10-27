@@ -19,11 +19,13 @@ Leitstelle.
 
 ## Zusammenspiel mit der Leitstelle
 
-Maschinenraum und [Leitstelle](https://github.com/HalloWelt42/leitstelle) gehören zusammen. Der Maschinenraum ist je
-Rechner die zweite Stelle neben dem Modell-Läufer: Er bündelt alle KI-Dienste, die der Modell-Läufer nicht verwaltet,
-etwa die des [Klangwerks](https://github.com/HalloWelt42/klangwerk), und ist für sich allein bedienbar. Mit einer
-Leitstelle geht jeder Zugriff nur noch über sie: Anwendungen rufen die Leitstelle, die Leitstelle startet, misst und
-erreicht die Dienste über den Maschinenraum.
+Maschinenraum und [Leitstelle](https://github.com/HalloWelt42/leitstelle) gehören zusammen. Die Leitstelle ist die
+zentrale Steuerung und Überwachung: sie sorgt dafür, dass Ressourcen nicht überlaufen, verteilt die Arbeit und greift
+ein, wo es nötig ist; sie muss dafür nicht jedes Bit durchschleifen. Den Modell-Läufer eines Rechners spricht sie
+direkt an. Der Maschinenraum ist je Rechner die zweite Stelle daneben: Er bündelt alle übrigen KI-Modelle und Dienste,
+die nicht im Modell-Läufer laufen, etwa die des [Klangwerks](https://github.com/HalloWelt42/klangwerk), meldet sie der
+Leitstelle als alternative Anbindung und ist für sich allein bedienbar. Dazu misst er für die Leitstelle, was sie zum
+Eingreifen braucht: echten Speicher, Zugriffe am Leitstand vorbei und die Last des Läufers und des Rechners.
 
 ```
 Webapps (Stellwerk)  ->  Leitstelle  ->  Modell-Läufer      (Sprachmodelle)
@@ -176,7 +178,7 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `neustart` | `fenster_s`, `im_fenster` | 600, 3 | mehr Abstürze im Zeitraum: der Dienst bleibt aus |
 | `leitstelle` | `adresse` | keine | Basisadresse einer Leitstelle; den Schlüssel trägt man in der Oberfläche ein |
 | `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten, nur mit Schlüssel |
-| `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner: angezeigt, für die Leitstelle unter `/laeufer` durchgereicht, auf fremde Zugriffe beobachtet |
+| `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner: angezeigt und beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse) |
 | `beobachtung` | `aktiv` | ja | der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie belastet Läufer und Rechner sind |
 | `beobachtung` | `takt_s` | 15 | Abstand der Beobachtungen, eigener Takt neben den Messwerten |
 | `beobachtung` | `schwelle_gb` | 2 | ab so viel Speicher gilt ein Programm außerhalb von Diensten und Läufer als möglicher Modellträger |
@@ -202,12 +204,8 @@ Rechner (`127.0.0.1`), Anwendungen rufen die Leitstelle (`/v1/dienste/<kennung>/
 über die **Durchleitung** des Maschinenraums durch (Port 8541, Abschnitt `durchleitung` der Einstellungen). Die
 Durchleitung nimmt nur Anfragen mit dem Schlüssel dieses Maschinenraums an und nur an Dienste, die laufen; Anfrage
 und Antwort gehen unverändert hindurch, auch Audio und Bilder. Die Leitstelle startet einen Dienst dabei bei Bedarf,
-plant seinen Speicher ein und hält ihn bei Speichernot wieder an, wenn seine Dienstdatei das erlaubt.
-
-Auch den Modell-Läufer dieses Rechners reicht die Durchleitung unter `/laeufer/<pfad>` weiter (Einstellung
-`nachbar.modell_laeufer`; kein Dienst darf deshalb `laeufer` heißen). Nimmt die Leitstelle diesen Weg, kommen alle ihre
-Verbindungen zum Läufer vom Maschinenraum. Der direkte Weg der Leitstelle zum Läufer bleibt als Rückfall per Hand
-erhalten; welcher gilt, entscheidet ein Schalter am Läufer in der Leitstelle.
+plant seinen Speicher ein und hält ihn bei Speichernot wieder an, wenn seine Dienstdatei das erlaubt. Den
+Modell-Läufer spricht die Leitstelle direkt an; durch die Durchleitung gehen nur die Dienste des Maschinenraums.
 
 ## Am Leitstand vorbei
 
@@ -216,7 +214,7 @@ Rechners zugreift:
 
 - Verbindungen zum Modell-Läufer, die nicht vom Maschinenraum kommen: ein Programm auf diesem Rechner mit Name,
   Prozess und Arbeitsordner oder eine Adresse im Netz. Ist es die Adresse des Rechners der Leitstelle, steht das dabei
-  (auf dem direkten Weg ist es die Leitstelle selbst, sonst ein anderes Programm dort).
+  (meist ist es die Leitstelle selbst, die den Läufer direkt anspricht; das deutet sie selbst).
 - Programme mit viel Speicher (ab `beobachtung.schwelle_gb`), die weder Dienst des Maschinenraums noch Teil des Läufers
   sind, etwa ein Bild- oder Sprachmodell im eigenen Prozess. Browser und virtuelle Maschinen stehen in den Ausnahmen.
 

@@ -145,7 +145,7 @@ class KnotenSchlaeft(BaseModel):
 
 
 class Fremdart(str, Enum):
-    LAEUFER = "laeufer"               # Verbindung zum Modell-Läufer dieses Rechners, die nicht über den Maschinenraum geht
+    LAEUFER = "laeufer"               # Verbindung zum Modell-Läufer dieses Rechners, die nicht vom Maschinenraum selbst kommt
     SPEICHER = "speicher"             # Programm mit viel Speicher, das weder Dienst noch Läufer ist (etwa ein Modell im eigenen Prozess)
 
 

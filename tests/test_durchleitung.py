@@ -41,35 +41,3 @@ def test_durchleitung(tmp_path: Path):
         assert c.get("/", headers=SCHLUESSEL).json()["dienste"] == ["probe"]
         asyncio.run(lz.verwalter.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe")))
 
-
-def test_laeufer_durchleitung(tmp_path: Path):
-    """/laeufer reicht an den Modell-Läufer dieses Rechners (nachbar.modell_laeufer); ohne Eintrag eine klare Absage."""
-    port = freier_port()
-    o = ordner_mit_dienst(tmp_path, port)
-    (tmp_path / "v1").mkdir()
-    (tmp_path / "v1" / "models").write_text('{"data": []}')
-    app = erstellen(o)
-    with TestClient(app, base_url="http://127.0.0.1:8540"), TestClient(durchleitung.erstellen(app.state.laufzeit)) as c:
-        o.schluessel_speichern("ls_probe")
-        lz = app.state.laufzeit
-        assert c.get("/laeufer/v1/models").status_code == 401
-        lz.verwalter.einstellungen.nachbar.modell_laeufer = None
-        r = c.get("/laeufer/v1/models", headers=SCHLUESSEL)
-        assert r.status_code == 404 and r.json()["grund"] == "kein_laeufer"
-        assert c.get("/", headers=SCHLUESSEL).json()["laeufer"] is False
-        # der Probedienst steht hier für den Läufer: ein Webserver auf diesem Rechner
-        asyncio.run(lz.verwalter.runde())
-        assert asyncio.run(lz.verwalter.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"))).erfolg
-        lz.verwalter.einstellungen.nachbar.modell_laeufer = f"http://127.0.0.1:{port}/"
-        r = c.get("/laeufer/v1/models", headers=SCHLUESSEL)
-        assert r.status_code == 200 and r.json() == {"data": []}
-        assert c.get("/", headers=SCHLUESSEL).json()["laeufer"] is True
-        assert lz.durchleitungen == 0
-        asyncio.run(lz.verwalter.befehl(Befehl(befehl=Befehlsart.DIENST_ANHALTEN, ziel="probe")))
-
-
-def test_kennung_laeufer_ist_vergeben(tmp_path: Path):
-    from maschinenraum.konfig import DienstVorlage
-    import pytest
-    with pytest.raises(ValueError, match="Weg zum Modell-Läufer"):
-        DienstVorlage(kennung="laeufer", name="Falsch", befehl=["true"], faehigkeiten={"text"}, ordner=str(tmp_path))

@@ -1,10 +1,10 @@
 """Beobachtung: Zugriffe auf die Modelle dieses Rechners, die nicht über die Leitstelle laufen.
 
 Zwei Arten (Grundsatz des Nutzers: alles nur über die Leitstelle; was daran vorbeigeht, soll sichtbar sein):
-- Verbindungen zum Modell-Läufer (`nachbar.modell_laeufer`), die nicht vom Maschinenraum selbst kommen. Nimmt die
-  Leitstelle den Weg über die Durchleitung, kommen alle ihre Verbindungen von hier; jede andere ist eine Umgehung, von
-  einem Programm auf diesem Rechner (mit Name und Kennung) oder aus dem Netz (mit Adresse; ob es der Rechner der
-  Leitstelle ist, steht dabei, denn auf dem direkten Weg ist sie es selbst).
+- Verbindungen zum Modell-Läufer (`nachbar.modell_laeufer`), die nicht vom Maschinenraum selbst kommen: von einem
+  Programm auf diesem Rechner (mit Name und Kennung) oder aus dem Netz (mit Adresse; ob es der Rechner der Leitstelle
+  ist, steht dabei, denn die Leitstelle spricht den Läufer direkt an). Was davon eine Umgehung ist, deutet die
+  Leitstelle.
 - Programme mit viel Speicher, die weder Dienst des Maschinenraums noch Teil des Läufers sind, etwa ein Bildmodell im
   eigenen Prozess. Was dauerhaft dazugehört (Browser, virtuelle Maschinen), steht in den Ausnahmen der Einstellung.
 

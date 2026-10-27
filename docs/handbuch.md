@@ -18,13 +18,14 @@ stand: cdd9903
 
 ## Zweck
 
-Der Maschinenraum ist die zweite Stelle neben LM Studio auf dem Mac: er verwaltet alle KI-Dienste, die kein
-Sprachmodell sind, etwa die Sprachdienste des [[Klangwerk]], Bilderzeugung und Musik. Jeder Dienst steht als eigene
-Datei in `~/Maschinenraum/dienste/` (Befehl, Port, Fähigkeiten, Speicherbedarf); der Maschinenraum startet ihn in
-eigener Prozessgruppe, prüft, ob er antwortet, misst Speicher und Last, startet ihn nach einem Absturz begrenzt neu
-und hält ihn an. Als Knoten-Agent der [[Leitstelle]] meldet er den gemessenen Speicher des Macs und nimmt ihre
-Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er ihre Anfragen roh an die Dienste und an
-den Modell-Läufer weiter. Er meldet ihr außerdem, was an ihr vorbei auf Modelle des Macs zugreift (fremde Verbindungen
+Der Maschinenraum ist die zweite Stelle neben dem Modell-Läufer auf dem Mac: er verwaltet alle übrigen KI-Modelle und
+Dienste, die nicht im Modell-Läufer laufen, etwa die Sprachdienste des [[Klangwerk]], Bilderzeugung und Musik, und
+meldet sie der [[Leitstelle]] als alternative Anbindung. Die Leitstelle ist die zentrale Steuerung und Überwachung;
+den Modell-Läufer spricht sie direkt an. Jeder Dienst steht als eigene Datei in `~/Maschinenraum/dienste/` (Befehl, Port, Fähigkeiten,
+Speicherbedarf); der Maschinenraum startet ihn in eigener Prozessgruppe, prüft, ob er antwortet, misst Speicher und
+Last, startet ihn nach einem Absturz begrenzt neu und hält ihn an. Als Knoten-Agent der Leitstelle meldet er den
+gemessenen Speicher des Macs und nimmt ihre Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er
+ihre Anfragen roh an seine Dienste weiter. Er meldet ihr außerdem, was an ihr vorbei auf Modelle des Macs zugreift (fremde Verbindungen
 zum Läufer, große Speicherverbraucher außerhalb der Dienste), und die Last: je Prozess des Läufers (Rolle, Modelldatei,
 Kerne, Speicher) und die Fremdlast des Macs ohne Läufer und Dienste. Auf ihren Befehl beendet er einen Arbeiter des
 Läufers, der ohne Auftrag rechnet, nie den Hauptprozess.

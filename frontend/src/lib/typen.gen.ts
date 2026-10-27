@@ -165,7 +165,7 @@ export interface Neustartregeln {
  */
 export interface Nachbar {
   /**
-   * Modell-Läufer auf diesem Rechner: angezeigt, für die Leitstelle unter /laeufer durchgereicht und auf fremde Zugriffe beobachtet; leer: keiner
+   * Modell-Läufer auf diesem Rechner: angezeigt und beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse); leer: keiner
    */
   modell_laeufer: string | null;
 }
@@ -187,7 +187,7 @@ export interface Schlaf {
 }
 /**
  * Was die Leitstelle über diesen Rechner zum Entscheiden braucht, im eigenen Takt: Zugriffe am Leitstand vorbei
- * (Verbindungen zum Modell-Läufer, die nicht über die Durchleitung kommen, und Programme mit viel Speicher außerhalb von
+ * (Verbindungen zum Modell-Läufer, die nicht vom Maschinenraum selbst kommen, und Programme mit viel Speicher außerhalb von
  * Diensten und Läufer) und die Last (je Prozess des Läufers und die Fremdlast des Rechners). Dazu, woran ein Arbeiter des
  * Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird.
  *
