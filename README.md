@@ -184,6 +184,7 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `beobachtung` | `schwelle_gb` | 2 | ab so viel Speicher gilt ein Programm außerhalb von Diensten und Läufer als möglicher Modellträger |
 | `beobachtung` | `ausnahmen` | Browser, virtuelle Maschinen | Teile der Befehlszeile, die nie als Speicherverbraucher gemeldet werden |
 | `beobachtung` | `modelldateien` | .gguf, .safetensors | Endungen von Modelldateien: ein Prozess des Läufers, der eine davon offen hat, ist ein Arbeiter |
+| `beobachtung` | `arbeiter_bibliotheken` | /extensions/backends/ | Ordnerteile im Pfad von Bibliotheken eines Rechenwerks: ein Prozess des Läufers, der eine Bibliothek daraus geladen hat, ist ein Arbeiter, auch ohne offene Modelldatei |
 | `beobachtung` | `anhaltezeit_s` | 10 | so lange darf ein Arbeiter des Läufers nach der Bitte um Beenden aufräumen, dann wird er hart beendet |
 | `schlaf` | `melden` | ja | auf dem Mac: beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, bis er wach ist |
 | `schlaf` | `leerlauf_aufschieben` | ja | solange die Leitstelle über diesen Rechner rechnen lässt, kein Schlaf nach Leerlauf; Deckel, Menü und Ein-Taste wirken weiter |
@@ -226,9 +227,11 @@ Im selben Takt und aus derselben Aufnahme (ein Aufruf von `ps`, einer von `lsof`
 Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus folgt, entscheidet die Leitstelle.
 
 - Je Prozess des Läufers (der Prozess am Läufer-Port samt Nachfahren): Name, Rolle, Modelldatei, Prozessorlast und
-  Speicher. Rollen: `haupt` lauscht am Port, `arbeiter` hat eine Modelldatei offen (eine geladene Instanz, erkannt an
-  den Endungen aus `beobachtung.modelldateien`, ein Aufruf von `lsof` für alle Läufer-Prozesse), `sonstig` ist alles
-  andere, etwa das Fenster.
+  Speicher. Rollen: `haupt` lauscht am Port, `arbeiter` ist eine geladene Instanz, `sonstig` ist alles andere, etwa das
+  Fenster. Ein Arbeiter hat eine Modelldatei offen (Endungen aus `beobachtung.modelldateien`) oder eine Bibliothek
+  eines Rechenwerks geladen (Ordnerteile aus `beobachtung.arbeiter_bibliotheken`, Spalte `txt` von `lsof`). Das zweite
+  Merkmal braucht es für Rechenwerke, die das Modell ganz in den Speicher lesen und die Datei danach schließen; bei
+  einem solchen Arbeiter bleibt die Modelldatei leer. Beides kommt aus einem Aufruf von `lsof` für alle Läufer-Prozesse.
 - Die Fremdlast des Rechners: die Prozessorlast aller übrigen Prozesse, ohne Läufer, ohne Dienste und ohne den
   Maschinenraum selbst, als Anteil aller Kerne. Das ist die Last, die der Mensch und seine übrigen Programme erzeugen;
   drosselt die Leitstelle danach ihre Hintergrundarbeit, schaukelt sie sich nicht an der eigenen Last auf.
@@ -241,8 +244,8 @@ Fremdlast, denn dann ist der Läufer nicht herauszurechnen.
 Auf Befehl der Leitstelle (`laeufer_prozess_beenden` mit der Prozessnummer) beendet der Maschinenraum einen Arbeiter
 des Läufers, der ohne Auftrag rechnet. Vorher prüft er frisch, dass der Prozess gerade ein Arbeiter ist; den
 Hauptprozess, fremde und verschwundene Prozesse lehnt er ab. Erst die Bitte (SIGTERM), nach
-`beobachtung.anhaltezeit_s` hart (SIGKILL); das Ergebnis nennt Name, Modelldatei und Weg. Der Läufer meldet die
-Instanz danach als entladen, und die Leitstelle lädt bei Bedarf neu.
+`beobachtung.anhaltezeit_s` hart (SIGKILL); das Ergebnis nennt Name, Modelldatei (wenn er eine offen hat) und Weg.
+Der Läufer meldet die Instanz danach als entladen, und die Leitstelle lädt bei Bedarf neu.
 
 ## Schnittstelle
 

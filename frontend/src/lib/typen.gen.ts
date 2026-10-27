@@ -218,6 +218,10 @@ export interface Beobachtung {
    */
   modelldateien: [string, ...string[]];
   /**
+   * Ordnerteile im Pfad von Bibliotheken eines Rechenwerks: ein Prozess des Läufers, der eine Bibliothek daraus geladen hat, ist ein Arbeiter, auch ohne offene Modelldatei (ein Rechenwerk, das das Modell ganz in den Speicher liest)
+   */
+  arbeiter_bibliotheken: string[];
+  /**
    * so lange darf ein Arbeiter des Läufers nach der Bitte um Beenden aufräumen, dann wird er hart beendet
    */
   anhaltezeit_s: number;

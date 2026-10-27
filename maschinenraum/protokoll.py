@@ -172,7 +172,7 @@ class Fremdzugriffe(BaseModel):
 
 class Laeuferrolle(str, Enum):
     HAUPT = "haupt"                   # lauscht am Port des Läufers; wird nie beendet
-    ARBEITER = "arbeiter"             # hat eine Modelldatei offen: eine geladene Instanz
+    ARBEITER = "arbeiter"             # hat eine Modelldatei offen oder eine Bibliothek eines Rechenwerks geladen: eine geladene Instanz
     SONSTIG = "sonstig"               # alles andere im Baum des Läufers, etwa das Fenster
 
 
@@ -182,7 +182,7 @@ class Laeuferprozess(BaseModel):
     pid: int
     name: str                         # Programmname wie bei der Beobachtung
     rolle: Laeuferrolle
-    modelldatei: str = ""             # bei arbeiter: die offene Modelldatei (Pfad, ~ für den Heimordner); sonst leer
+    modelldatei: str = ""             # bei arbeiter: die offene Modelldatei (Pfad, ~ für den Heimordner); sonst und bei einem Arbeiter ohne offene Modelldatei leer
     cpu_prozent: float | None = None  # Rechenzeit seit der letzten Messung je Wandzeit, in Prozent eines Kerns; leer beim ersten Mal und bei neuer pid
     gb: float | None = None           # Speicher wie bei den Diensten
 

@@ -27,6 +27,8 @@ EIGEN = 4242          # der Maschinenraum selbst
 HEIM = os.path.expanduser("~")
 BGE = f"{HEIM}/.lmstudio/models/lmstudio-community/bge-m3-GGUF/bge-m3-Q8_0.gguf"
 MLX = f"{HEIM}/.lmstudio/models/mlx-community/Qwen3-8B-4bit/model.safetensors"
+RECHENWERK = f"{HEIM}/.lmstudio/extensions/backends/mlx-llm-mac-arm64-apple-metal-advsimd-1.11.0/libllm_engine.dylib"
+GGUF_RECHENWERK = f"{HEIM}/.lmstudio/extensions/backends/llama.cpp-mac-arm64-apple-metal-advsimd-2.47.0/libllama.dylib"
 
 #: zwei Momentaufnahmen, 15 s auseinander: Eltern, Befehlszeile und verbrauchte Rechenzeit je pid
 VORHER = {
@@ -35,6 +37,7 @@ VORHER = {
     809: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 2000.0),          # Arbeiter, bge-m3 (2)
     810: (807, "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (Renderer).app/Contents/MacOS/LM Studio Helper (Renderer)", 50.0),
     811: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 10.0),            # Arbeiter, MLX
+    813: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 400.0),           # Arbeiter ohne offene Modelldatei (Rechenwerk)
     950: (1, "/opt/python3 -m klangwerk hoeren --port 8783", 500.0),               # Dienst des Maschinenraums
     EIGEN: (1, "/opt/python3 -m maschinenraum", 30.0),
     4243: (EIGEN, "lsof -nP", 0.1),                                                  # Kind des Maschinenraums
@@ -48,6 +51,7 @@ NACHHER = {
     809: (807, VORHER[809][1], 2000.75),        # 5 %
     810: (807, VORHER[810][1], 50.15),          # 1 %
     811: (807, VORHER[811][1], 10.0),           # 0 %
+    813: (807, VORHER[813][1], 406.0),          # 40 %
     812: (807, VORHER[808][1], 7.0),            # neu: ohne Prozent
     950: (1, VORHER[950][1], 530.0),            # Dienst: zählt nicht zur Fremdlast
     EIGEN: (1, VORHER[EIGEN][1], 30.5),         # Maschinenraum: zählt nicht
@@ -91,10 +95,14 @@ PORT_LSOF = "\n".join(["p807", "cLM Studio", "f20", "n*:1234", "TST=LISTEN"])
 DATEIEN_LSOF = "\n".join([
     "p807", "ftxt", "s1000", "n/Applications/LM Studio.app/Contents/MacOS/LM Studio",
     "p808", "ftxt", "s605000000", f"n{BGE}", "ftxt", "s900000", f"n{HEIM}/.lmstudio/models/x/mmproj-klein.gguf", "f12", "s0", "n/dev/null",
+    "ftxt", "s3000000", f"n{GGUF_RECHENWERK}",
     "p809", "ftxt", "s605000000", f"n{BGE}",
     "p810", "ftxt", "s2000", "n/usr/lib/libSystem.B.dylib",
+    "ftxt", "s5000", "n/System/Library/Extensions/AGXMetalG16X.bundle/Contents/MacOS/AGXMetalG16X",   # Systemordner: kein Rechenwerk
+    "f31", "s900", f"n{HEIM}/.lmstudio/extensions/backends/backends.json",                         # offen, aber nicht geladen (nicht txt)
     "p811", "ftxt", "s4300000000", f"n{MLX}",
     "p812", "ftxt", "s605000000", f"n{BGE}",
+    "p813", "fcwd", "s704", "n/", "ftxt", "s52000000", f"n{RECHENWERK}", "f14", "s0", "n/dev/null",
 ])
 
 
@@ -152,26 +160,47 @@ def test_rollen_modelldateien_und_prozente(nachgestellt, monkeypatch):
     rollen = {p.pid: (p.rolle, p.modelldatei) for p in erste.laeufer}
     assert rollen == {807: (Laeuferrolle.HAUPT, ""), 808: (Laeuferrolle.ARBEITER, BGE.replace(HEIM, "~")),
                       809: (Laeuferrolle.ARBEITER, BGE.replace(HEIM, "~")), 810: (Laeuferrolle.SONSTIG, ""),
-                      811: (Laeuferrolle.ARBEITER, MLX.replace(HEIM, "~"))}
-    assert [p.pid for p in erste.laeufer] == [807, 808, 809, 811, 810]     # Hauptprozess, Arbeiter, Sonstiges
+                      811: (Laeuferrolle.ARBEITER, MLX.replace(HEIM, "~")), 813: (Laeuferrolle.ARBEITER, "")}
+    assert [p.pid for p in erste.laeufer] == [807, 808, 809, 811, 813, 810]     # Hauptprozess, Arbeiter, Sonstiges
     assert erste.laeufer[1].name == "node (LM Studio)" and erste.laeufer[1].gb == 1.2
 
     assert zweite.gemessen and zweite.fremd_prozent == 10.0              # ohne Läufer, Dienste und Maschinenraum
     prozent = {p.pid: p.cpu_prozent for p in zweite.laeufer}
-    assert prozent == {807: 2.0, 808: 100.0, 809: 5.0, 811: 0.0, 812: None, 810: 1.0}
+    assert prozent == {807: 2.0, 808: 100.0, 809: 5.0, 811: 0.0, 812: None, 813: 40.0, 810: 1.0}
 
 
 def test_ein_aufruf_von_lsof_fuer_alle_modelldateien(nachgestellt):
     Lastmesser(lambda: _einstellungen()).messen(_beobachter().aufnehmen())
     dateien = [a for a in nachgestellt if "pns" in a]
-    assert len(dateien) == 1 and dateien[0][dateien[0].index("-p") + 1] == "807,808,809,810,811"
+    assert len(dateien) == 1 and dateien[0][dateien[0].index("-p") + 1] == "807,808,809,810,811,813"
 
 
 def test_endungen_aus_der_einstellung(nachgestellt):
     e = _einstellungen()
     e.beobachtung.modelldateien = [".safetensors"]
+    e.beobachtung.arbeiter_bibliotheken = []
     r = Lastmesser(lambda: e).messen(_beobachter(e).aufnehmen())
     assert [p.pid for p in r.laeufer if p.rolle == Laeuferrolle.ARBEITER] == [811]
+
+
+def test_arbeiter_an_der_geladenen_bibliothek(nachgestellt):
+    """Befund vom 27.10.2026: der Arbeiter des 80B-Modells hält keine Modelldatei offen (das Rechenwerk liest das Modell
+    ganz in den Speicher) und zählte als sonstig. Er hat aber die Bibliothek seines Rechenwerks geladen (Spalte txt)."""
+    e = _einstellungen()
+    r = Lastmesser(lambda: e).messen(_beobachter(e).aufnehmen())
+    rollen = {p.pid: (p.rolle, p.modelldatei) for p in r.laeufer}
+    assert rollen[813] == (Laeuferrolle.ARBEITER, "")                       # Modelldatei bleibt leer
+    assert rollen[808] == (Laeuferrolle.ARBEITER, BGE.replace(HEIM, "~"))   # beides: die Modelldatei steht da
+    assert rollen[810] == (Laeuferrolle.SONSTIG, "")                        # nur offen oder im Systemordner: kein Arbeiter
+
+    e.beobachtung.arbeiter_bibliotheken = []                                # nur noch Modelldateien
+    r = Lastmesser(lambda: e).messen(_beobachter(e).aufnehmen())
+    assert {p.pid: p.rolle for p in r.laeufer}[813] == Laeuferrolle.SONSTIG
+
+    e.beobachtung.arbeiter_bibliotheken = ["/MLX-LLM-mac-arm64-apple-metal-advsimd-1.11.0/"]   # Groß und klein gleich
+    e.beobachtung.modelldateien = [".gibtsnicht"]
+    r = Lastmesser(lambda: e).messen(_beobachter(e).aufnehmen())
+    assert [p.pid for p in r.laeufer if p.rolle == Laeuferrolle.ARBEITER] == [813]
 
 
 def test_ohne_lsof_ohne_aussage(nachgestellt, monkeypatch):
@@ -188,7 +217,7 @@ def test_ohne_laeufer_nur_fremdlast(nachgestellt, monkeypatch):
     _, zweite = _messen_zweimal(_beobachter(e), monkeypatch)
     # ohne eingetragenen Läufer gibt es keinen, der herauszurechnen wäre: was er rechnet, ist fremd
     assert zweite.gemessen is False and zweite.laeufer == []
-    assert zweite.fremd_prozent == pytest.approx(10.0 + (0.3 + 15 + 0.75 + 0.15 + 0 + 7) / 150 * 100, abs=0.05)
+    assert zweite.fremd_prozent == pytest.approx(10.0 + (0.3 + 15 + 0.75 + 0.15 + 0 + 7 + 6) / 150 * 100, abs=0.05)
 
 
 def test_abgeschaltet_misst_nichts(nachgestellt):
@@ -207,6 +236,17 @@ def test_endungen_brauchen_einen_punkt():
     with pytest.raises(ValueError):
         Beobachtung(modelldateien=[])
     assert Beobachtung().modelldateien == [".gguf", ".safetensors"]
+
+
+@pytest.mark.parametrize("falsch", ["", "/", "//", "backends", "/extensions/backends", "extensions/backends/", " /backends/", "/a//b/"])
+def test_bibliotheken_sind_ordnerteile(falsch):
+    with pytest.raises(ValueError):
+        Beobachtung(arbeiter_bibliotheken=[falsch])
+
+
+def test_bibliotheken_vorgabe_und_leer():
+    assert Beobachtung().arbeiter_bibliotheken == ["/extensions/backends/"]
+    assert Beobachtung(arbeiter_bibliotheken=[]).arbeiter_bibliotheken == []
 
 
 # ── Beenden ──────────────────────────────────────────────────────────────
@@ -243,7 +283,7 @@ async def test_haengender_arbeiter_nach_der_anhaltezeit_hart(nachgestellt, signa
 
 @pytest.mark.parametrize("ziel, grund", [
     ("807", "Hauptprozess des Läufers"),
-    ("810", "hat keine Modelldatei offen"),
+    ("810", "ist kein Arbeiter"),
     ("960", "gehört nicht zum Modell-Läufer"),
     ("12345", "läuft nicht (mehr)"),
     ("abc", "keine Prozessnummer"),
@@ -251,6 +291,12 @@ async def test_haengender_arbeiter_nach_der_anhaltezeit_hart(nachgestellt, signa
 async def test_beendet_nur_arbeiter(nachgestellt, ziel, grund):
     r = await Laeuferaufsicht(_beobachter()).beenden(ziel)      # ein Signal ließe keine_echten_signale scheitern
     assert not r.erfolg and grund in r.meldung
+
+
+async def test_beendet_einen_arbeiter_ohne_modelldatei(nachgestellt, signale):
+    r = await Laeuferaufsicht(_beobachter()).beenden("813")
+    assert r.erfolg and signale.gesendet == [(813, signal.SIGTERM)]
+    assert r.meldung == "node (LM Studio) beendet: auf Bitte (SIGTERM)"
 
 
 async def test_ohne_lsof_wird_nichts_beendet(nachgestellt, monkeypatch):

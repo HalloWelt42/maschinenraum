@@ -108,5 +108,6 @@ dauert aber Stunden. Zurückspielen: den Ordner an seinen Ort legen (Modus 700, 
   er findet sie über `zustand.json` und ihre Ports wieder und meldet sie der Leitstelle; was nicht mehr läuft, startet
   er nicht neu.
 - Die Leitstelle zeigt beim Mac keine Läufer-Prozesse: `lsof` fehlt, kein Läufer eingetragen (`nachbar.modell_laeufer`)
-  oder die Beobachtung ist aus (`beobachtung.aktiv`). Erkennt sie Arbeiter nicht, passen die Endungen in
-  `beobachtung.modelldateien` nicht zu den Modelldateien des Läufers.
+  oder die Beobachtung ist aus (`beobachtung.aktiv`). Erkennt sie Arbeiter nicht, passen weder die Endungen in
+  `beobachtung.modelldateien` zu den Modelldateien des Läufers noch die Ordnerteile in
+  `beobachtung.arbeiter_bibliotheken` zu den Bibliotheken seiner Rechenwerke (`lsof -p <pid> | grep txt` zeigt sie).

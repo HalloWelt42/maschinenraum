@@ -94,6 +94,10 @@ class Beobachtung(BaseModel):
     modelldateien: list[str] = Field(default_factory=lambda: [".gguf", ".safetensors"], min_length=1,
                                      description="Endungen von Modelldateien: ein Prozess des Läufers, der eine davon offen hat, ist ein "
                                                  "Arbeiter (eine geladene Instanz)")
+    arbeiter_bibliotheken: list[str] = Field(default_factory=lambda: ["/extensions/backends/"],
+                                             description="Ordnerteile im Pfad von Bibliotheken eines Rechenwerks: ein Prozess des Läufers, "
+                                                         "der eine Bibliothek daraus geladen hat, ist ein Arbeiter, auch ohne offene "
+                                                         "Modelldatei (ein Rechenwerk, das das Modell ganz in den Speicher liest)")
     anhaltezeit_s: float = Field(default=10, ge=1, le=120, description="so lange darf ein Arbeiter des Läufers nach der Bitte um Beenden "
                                                                      "aufräumen, dann wird er hart beendet")
 
@@ -104,6 +108,16 @@ class Beobachtung(BaseModel):
         falsch = [w for w in werte if len(w) < 2 or not w.startswith(".") or w.strip() != w]
         if falsch:
             raise ValueError(f"Endungen mit Punkt und ohne Leerzeichen (.gguf, .safetensors), nicht {', '.join(repr(w) for w in falsch)}")
+        return werte
+
+    @field_validator("arbeiter_bibliotheken")
+    @classmethod
+    def _ordnerteile(cls, werte: list[str]) -> list[str]:
+        """Nur Ordnerteile mit Schrägstrich vorn und hinten ("/extensions/backends/"): ein leerer Teil oder "/" passte auf jede
+        Bibliothek, und jeder Prozess des Läufers wäre ein Arbeiter."""
+        falsch = [w for w in werte if len(w) < 3 or not (w.startswith("/") and w.endswith("/")) or w.strip() != w or "//" in w]
+        if falsch:
+            raise ValueError(f"Ordnerteile mit Schrägstrich vorn und hinten (/extensions/backends/), nicht {', '.join(repr(w) for w in falsch)}")
         return werte
 
 
