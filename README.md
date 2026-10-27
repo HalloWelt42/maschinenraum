@@ -186,6 +186,7 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `leitstelle` | `adresse` | keine | Basisadresse einer Leitstelle; den Schlüssel trägt man in der Oberfläche ein |
 | `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten, nur mit Schlüssel |
 | `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner: angezeigt und beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse) |
+| `nachbar` | `stellwerk` | http://127.0.0.1:8550 | Stellwerk auf diesem Rechner: im Takt der Beobachtung gelesen (nur lesend); Prozesse seiner Apps zählen weder als fremder Speicher noch als Fremdlast, ihre Last geht an die Leitstelle; leer: keins |
 | `beobachtung` | `aktiv` | ja | der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie belastet Läufer und Rechner sind |
 | `beobachtung` | `takt_s` | 15 | Abstand der Beobachtungen, eigener Takt neben den Messwerten (von Beginn zu Beginn); zugleich die Frist für die Messung des Docker-Rechners |
 | `beobachtung` | `docker` | ja | mit der Last die des Docker-Rechners melden: Kerne, Speicher und je Container Prozessorlast und Speicher |
@@ -225,14 +226,17 @@ Rechners zugreift:
   Prozess und Arbeitsordner oder eine Adresse im Netz. Ist es die Adresse des Rechners der Leitstelle, steht das dabei
   (meist ist es die Leitstelle selbst, die den Läufer direkt anspricht; das deutet sie selbst).
 - Programme mit viel Speicher (ab `beobachtung.schwelle_gb`), die weder Dienst des Maschinenraums noch Teil des Läufers
-  sind, etwa ein Bild- oder Sprachmodell im eigenen Prozess. Browser und virtuelle Maschinen stehen in den Ausnahmen.
+  noch Prozess einer App des Stellwerks sind, etwa ein Bild- oder Sprachmodell im eigenen Prozess. Browser und
+  virtuelle Maschinen stehen in den Ausnahmen. Spricht ein Prozess einer App den Läufer direkt an, bleibt das eine
+  Umgehung wie jede andere.
 
 Gemessen wird mit `lsof` und der Prozesstabelle; ohne `lsof` meldet er, dass er nicht beobachten kann.
 
-## Last des Läufers, des Rechners und des Docker-Rechners
+## Last des Läufers, der Apps, des Rechners und des Docker-Rechners
 
-Im selben Takt und aus derselben Aufnahme (ein Aufruf von `ps`, einer von `lsof` am Läufer-Port) meldet der
-Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus folgt, entscheidet die Leitstelle.
+Im selben Takt und aus derselben Aufnahme (Stand des Stellwerks, ein Aufruf von `ps`, einer von `lsof` am Läufer-Port)
+meldet der Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus folgt, entscheidet die
+Leitstelle.
 
 - Je Prozess des Läufers (der Prozess am Läufer-Port samt Nachfahren): Name, Rolle, Modelldatei, Prozessorlast und
   Speicher. Rollen: `haupt` lauscht am Port, `arbeiter` ist eine geladene Instanz, `sonstig` ist alles andere, etwa das
@@ -240,9 +244,18 @@ Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus 
   eines Rechenwerks geladen (Ordnerteile aus `beobachtung.arbeiter_bibliotheken`, Spalte `txt` von `lsof`). Das zweite
   Merkmal braucht es für Rechenwerke, die das Modell ganz in den Speicher lesen und die Datei danach schließen; bei
   einem solchen Arbeiter bleibt die Modelldatei leer. Beides kommt aus einem Aufruf von `lsof` für alle Läufer-Prozesse.
-- Die Fremdlast des Rechners: die Prozessorlast aller übrigen Prozesse, ohne Läufer, ohne Dienste und ohne den
-  Maschinenraum selbst, als Anteil aller Kerne. Das ist die Last, die der Mensch und seine übrigen Programme erzeugen;
-  drosselt die Leitstelle danach ihre Hintergrundarbeit, schaukelt sie sich nicht an der eigenen Last auf.
+- Die Apps des Stellwerks (`apps`, aus `nachbar.stellwerk`): je laufendem nativem Teil App, Teil, seine Prozesse samt
+  Nachfahren, Prozessorlast in Prozent eines Kerns und Speicher. Welche Prozesse dazugehören, sagt das Stellwerk
+  (`GET <stellwerk>/api/stand`, Feld `pids` je Teil, kurze Frist, nur lesend); ein Prozess, den mehrere Teile nennen,
+  zählt beim ersten, und ein Teil, den ein anderer gestartet hat, behält seine Prozesse. Docker-Teile fehlen hier, sie
+  stehen beim Docker-Rechner. Antwortet das Stellwerk nicht oder meldet es keine Prozessnummern (ältere Fassung), ist
+  dort `gemessen` falsch und `meldung` sagt warum; dann wird nichts zugeordnet, und die Beobachtung arbeitet wie ohne
+  Stellwerk. Den Wechsel nennt das Protokoll einmal ("Apps des Stellwerks nicht zugeordnet: ...").
+- Die Fremdlast des Rechners: die Prozessorlast aller übrigen Prozesse, ohne Läufer, ohne Dienste, ohne Apps des
+  Stellwerks und ohne den Maschinenraum selbst, als Anteil aller Kerne. Das ist die Last, die der Mensch und seine
+  übrigen Programme erzeugen; drosselt die Leitstelle danach ihre Hintergrundarbeit, schaukelt sie sich nicht an der
+  eigenen Last auf. Was die Apps rechnen, zählt nach derselben Regel (ein neuer Prozess ganz) und steht bei den Apps:
+  nichts doppelt, nichts verloren.
 - Der Docker-Rechner (`docker`, abschaltbar mit `beobachtung.docker`): seine Kerne und sein Speicher und je laufendem
   Container Name, Compose-Projekt (Label `com.docker.compose.project`), Prozessorlast in Prozent eines Kerns (wie
   `docker stats`) und belegter Speicher. Auf dem Mac laufen die Container in einer virtuellen Maschine, die dort als ein
@@ -256,8 +269,8 @@ Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus 
 Prozessorlast zählt zeitbasiert: verbrauchte Rechenzeit seit der letzten Messung je Wandzeit, beim Läufer in Prozent
 eines Kerns. Die erste Messung nach dem Verbinden und neue Prozesse haben noch keinen Wert. Ohne `lsof` oder ohne
 eingetragenen Läufer sagt die Liste der Läufer-Prozesse nichts (`gemessen` falsch); ohne `lsof` fehlt auch die
-Fremdlast, denn dann ist der Läufer nicht herauszurechnen. Das Feld `docker` ist neu (seit 0.16.0) und darf fehlen:
-eine Leitstelle, die es noch nicht kennt, übergeht es.
+Fremdlast, denn dann ist der Läufer nicht herauszurechnen. Die Felder `docker` (seit 0.16.0) und `apps` (seit 0.17.0)
+dürfen fehlen: eine Leitstelle, die sie noch nicht kennt, übergeht sie.
 
 Auf Befehl der Leitstelle (`laeufer_prozess_beenden` mit der Prozessnummer) beendet der Maschinenraum einen Arbeiter
 des Läufers, der ohne Auftrag rechnet. Vorher prüft er frisch, dass der Prozess gerade ein Arbeiter ist; den

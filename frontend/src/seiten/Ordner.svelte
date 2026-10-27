@@ -37,7 +37,9 @@
           <dt>Durchleitung</dt><dd class="zahl">{e.durchleitung.adresse}:{e.durchleitung.port}</dd>
           <dt>Messtakt</dt><dd><span class="zahl">{e.messung.takt_s}</span> s{e.messung.macmon ? ', mit Zusatzmessungen, wenn vorhanden' : ''}</dd>
           <dt>Neustart nach Absturz</dt><dd>Pausen <span class="zahl">{e.neustart.pausen_s.join(', ')}</span> s, höchstens <span class="zahl">{e.neustart.im_fenster}</span> in <span class="zahl">{e.neustart.fenster_s}</span> s</dd>
-          <dt>Modell-Läufer</dt><dd class="zahl">{e.nachbar.modell_laeufer ?? 'keiner'}</dd>
+          <dt>Modell-Läufer</dt><dd class="zahl">{e.nachbar.modell_laeufer || 'keiner'}</dd>
+          <dt>Stellwerk</dt><dd><span class="zahl">{e.nachbar.stellwerk || 'keins'}</span>
+            <small>Im Takt der Beobachtung gelesen: Prozesse seiner Apps zählen nicht als fremd, ihre Last geht an die Leitstelle</small></dd>
           <dt>Schlaf</dt><dd>{e.schlaf.melden ? 'der Leitstelle melden; Aufträge warten, bis der Rechner wach ist' : 'nicht melden'}
             <small>{e.schlaf.leerlauf_aufschieben ? 'Kein Leerlaufschlaf, solange die Leitstelle hier rechnen lässt; Deckel, Menü und Ein-Taste wirken weiter' : 'Leerlaufschlaf wie eingestellt, auch mitten in einem Auftrag'}</small></dd>
         </dl>
@@ -47,7 +49,7 @@
 </div>
 
 <style>
-  .spalten-ordner { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: var(--mr-a4); align-items: start; }
+  .spalten-ordner { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: var(--mr-a4); align-items: start; }
   .spalten-ordner :global(.karte) { margin: 0; }
   .angaben { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--mr-a3) var(--mr-a4); margin: 0; font-size: var(--mr-gr-klein); }
   .angaben dt { color: var(--mr-text-3); }

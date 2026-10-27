@@ -5,14 +5,15 @@ Zwei Arten (Grundsatz des Nutzers: alles nur über die Leitstelle; was daran vor
   Programm auf diesem Rechner (mit Name und Kennung) oder aus dem Netz (mit Adresse; ob es der Rechner der Leitstelle
   ist, steht dabei, denn die Leitstelle spricht den Läufer direkt an). Was davon eine Umgehung ist, deutet die
   Leitstelle.
-- Programme mit viel Speicher, die weder Dienst des Maschinenraums noch Teil des Läufers sind, etwa ein Bildmodell im
-  eigenen Prozess. Was dauerhaft dazugehört (Browser, virtuelle Maschinen), steht in den Ausnahmen der Einstellung.
+- Programme mit viel Speicher, die weder Dienst des Maschinenraums noch Teil des Läufers noch Prozess einer App des
+  Stellwerks sind, etwa ein Bildmodell im eigenen Prozess. Was dauerhaft dazugehört (Browser, virtuelle Maschinen),
+  steht in den Ausnahmen der Einstellung. Welche Prozesse zu den Apps gehören, sagt das Stellwerk (`apps.py`).
 
 Gemessen mit lsof (Verbindungen) und der Prozesstabelle samt Speicher je Prozess aus dem Dienstkern. Ohne lsof bleibt
 die Beobachtung aus und meldet das, statt eine leere Liste als "nichts gefunden" auszugeben.
 
-Je Takt wird einmal aufgenommen (`Aufnahme`: Prozesstabelle, Verbindungen am Läufer-Port); daraus entstehen die
-Zugriffe am Leitstand vorbei hier und die Last von Läufer und Rechner in `laeuferlast.py`.
+Je Takt wird einmal aufgenommen (`Aufnahme`: Stand des Stellwerks, Prozesstabelle, Verbindungen am Läufer-Port);
+daraus entstehen die Zugriffe am Leitstand vorbei hier und die Last von Läufer, Apps und Rechner in `laeuferlast.py`.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from urllib.parse import urlparse
 
 from dienstkern.messen import GIB, Prozesstabelle, prozess_bytes
 
+from .apps import Appteil, Stellwerkleser, Stellwerkstand, zuordnen
 from .konfig import Einstellungen
 from .protokoll import Fremdart, Fremdzugriff, Fremdzugriffe
 
@@ -174,7 +176,8 @@ def mit_eltern(name: str, pid: int, tabelle: Prozesstabelle) -> str:
 @dataclass
 class Aufnahme:
     """Was ein Takt einmal misst und Zugriffe am Leitstand vorbei wie Last gemeinsam nutzen: die Prozesstabelle (ein
-    Aufruf von ps) und die Verbindungen am Läufer-Port samt lauschendem Prozess (ein Aufruf von lsof)."""
+    Aufruf von ps), die Verbindungen am Läufer-Port samt lauschendem Prozess (ein Aufruf von lsof) und die Prozesse der
+    Apps des Stellwerks."""
 
     tabelle: Prozesstabelle
     zeit_s: float                                       # time.monotonic() der Prozesstabelle
@@ -184,18 +187,28 @@ class Aufnahme:
     lauschend: set[int] = field(default_factory=set)    # Hauptprozess des Läufers (lauscht am Port)
     laeufer_pids: set[int] = field(default_factory=set) # lauschende Prozesse samt Nachfahren
     eigene: set[int] = field(default_factory=set)       # Dienste des Maschinenraums und er selbst samt Nachfahren
+    apps: Stellwerkstand | None = None                  # was das Stellwerk gesagt hat; None: keins eingetragen (oder nicht gefragt)
+    app_prozesse: list[tuple[Appteil, list[int]]] = field(default_factory=list)   # je laufendem nativem Teil seine Prozesse
+
+    @property
+    def app_pids(self) -> set[int]:
+        """Alle Prozesse der Apps des Stellwerks (ohne Läufer und Eigenes)."""
+        return {p for _, pids in self.app_prozesse for p in pids}
 
 
-def aufnehmen(einstellungen: Einstellungen, dienste: Iterable) -> Aufnahme:
-    """Eine Aufnahme jetzt (auch ohne aktive Beobachtung, etwa für die Prüfung vor dem Beenden eines Arbeiters)."""
+def aufnehmen(einstellungen: Einstellungen, dienste: Iterable, apps: Stellwerkstand | None = None) -> Aufnahme:
+    """Eine Aufnahme jetzt (auch ohne aktive Beobachtung, etwa für die Prüfung vor dem Beenden eines Arbeiters). `apps`
+    ist der Stand des Stellwerks dieses Takts; die Prozesstabelle wird danach genommen, damit sie seine Prozesse kennt."""
     port = urlparse(einstellungen.nachbar.modell_laeufer or "").port
     tabelle, zeit_s = Prozesstabelle(), monotonic()
     gelesen = verbindungen_lesen(port) if port else None
     verbindungen, lauschend = gelesen if gelesen is not None else ([], set())
+    laeufer_pids = {p for server in lauschend for p in tabelle.mit_nachfahren(server)}
+    eigene = eigene_pids(dienste, tabelle) | set(tabelle.mit_nachfahren(os.getpid()))
+    app_prozesse = zuordnen(apps.teile, tabelle, laeufer_pids | eigene) if apps is not None and apps.gelesen else []
     return Aufnahme(tabelle=tabelle, zeit_s=zeit_s, port=port, laeufer_gesehen=gelesen is not None,
-                    verbindungen=verbindungen, lauschend=lauschend,
-                    laeufer_pids={p for server in lauschend for p in tabelle.mit_nachfahren(server)},
-                    eigene=eigene_pids(dienste, tabelle) | set(tabelle.mit_nachfahren(os.getpid())))
+                    verbindungen=verbindungen, lauschend=lauschend, laeufer_pids=laeufer_pids, eigene=eigene,
+                    apps=apps, app_prozesse=app_prozesse)
 
 
 class Beobachter:
@@ -205,15 +218,17 @@ class Beobachter:
     def __init__(self, einstellungen: Callable[[], Einstellungen], dienste: Callable[[], Iterable]) -> None:
         self._einstellungen = einstellungen
         self.dienste = dienste
+        self.stellwerk = Stellwerkleser(einstellungen)
 
     @property
     def einstellungen(self) -> Einstellungen:
         return self._einstellungen()
 
     def aufnehmen(self) -> Aufnahme | None:
-        """Die Aufnahme dieses Takts; None, wenn die Beobachtung abgeschaltet ist (dann wird gar nicht gemessen)."""
+        """Die Aufnahme dieses Takts samt Stand des Stellwerks; None, wenn die Beobachtung abgeschaltet ist (dann wird gar
+        nicht gemessen und nicht gefragt)."""
         e = self.einstellungen
-        return aufnehmen(e, self.dienste()) if e.beobachtung.aktiv else None
+        return aufnehmen(e, self.dienste(), self.stellwerk.lesen()) if e.beobachtung.aktiv else None
 
     def fremde(self, a: Aufnahme | None) -> Fremdzugriffe:
         """Zugriffe am Leitstand vorbei aus der Aufnahme. Ohne Aufnahme oder, bei eingetragenem Läufer, ohne lsof ohne
@@ -223,7 +238,7 @@ class Beobachter:
         zugriffe: list[Fremdzugriff] = []
         if a.port:
             zugriffe += self._laeuferzugriffe(a.verbindungen, a.port, a.laeufer_pids, a.tabelle)
-        zugriffe += self._speicherzugriffe(a.tabelle, a.laeufer_pids | a.eigene | {os.getpid()})
+        zugriffe += self._speicherzugriffe(a.tabelle, a.laeufer_pids | a.eigene | a.app_pids | {os.getpid()})
         ordner = arbeitsordner(z.pid for z in zugriffe if z.pid)
         for z in zugriffe:
             if z.pid:

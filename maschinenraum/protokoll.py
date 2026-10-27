@@ -207,13 +207,37 @@ class DockerLast(BaseModel):
     container: list[DockerContainer] = Field(default_factory=list)
 
 
+class AppTeil(BaseModel):
+    """Ein laufender nativer Teil einer App des Stellwerks (kein KI-Dienst): seine Prozesse samt Nachfahren."""
+
+    app: str                          # Kennung der App im Stellwerk
+    app_name: str
+    teil: str                         # Kennung des Teils in der App
+    name: str                         # Name des Teils
+    pids: list[int] = Field(default_factory=list)   # seine Prozesse samt Nachfahren; einer, den mehrere Teile nennen, steht nur beim ersten
+    cpu_prozent: float | None = None  # Rechenzeit seiner Prozesse seit der letzten Messung je Wandzeit, in Prozent eines Kerns (ein neuer Prozess zählt ganz); leer beim ersten Mal
+    gb: float | None = None           # Speicher seiner Prozesse zusammen
+
+
+class AppsLast(BaseModel):
+    """Last der Apps, die das Stellwerk dieses Rechners startet, je laufendem nativem Teil; Docker-Teile stehen beim
+    Docker-Rechner. Ihre Prozesse zählen weder als fremder Speicher noch zur Fremdlast. `gemessen` ist falsch, wenn das
+    Stellwerk nicht antwortet oder keine Prozessnummern meldet; dann sagt `teile` nichts und `meldung` sagt, warum."""
+
+    gemessen: bool = True
+    meldung: str = ""
+    teile: list[AppTeil] = Field(default_factory=list)
+
+
 class KnotenLast(BaseModel):
-    """`knoten.last`: Last des Modell-Läufers je Prozess, die Fremdlast des Rechners und die Last des Docker-Rechners, im
-    Takt der Beobachtung. Zeitbasiert (Rechenzeit je Wandzeit), nicht mit `cpu_prozent` der Messwerte zu mischen.
-    `gemessen` ist falsch ohne lsof oder ohne Läufer-Port; dann sagt `laeufer` nichts (statt "keine Prozesse")."""
+    """`knoten.last`: Last des Modell-Läufers je Prozess, die Fremdlast des Rechners, die Last der Apps des Stellwerks
+    und die des Docker-Rechners, im Takt der Beobachtung. Zeitbasiert (Rechenzeit je Wandzeit), nicht mit `cpu_prozent`
+    der Messwerte zu mischen. `gemessen` ist falsch ohne lsof oder ohne Läufer-Port; dann sagt `laeufer` nichts (statt
+    "keine Prozesse")."""
 
     gemessen: bool = True
     kerne: int                        # logische Kerne des Rechners
     laeufer: list[Laeuferprozess] = Field(default_factory=list)
-    fremd_prozent: float | None = None   # Last ohne Läufer und ohne Dienste des Maschinenraums, Anteil aller Kerne (0 bis 100); leer beim ersten Mal
+    fremd_prozent: float | None = None   # Last ohne Läufer, ohne Dienste des Maschinenraums und ohne Apps des Stellwerks, Anteil aller Kerne (0 bis 100); leer beim ersten Mal
+    apps: AppsLast | None = None         # leer: kein Stellwerk eingetragen (nachbar.stellwerk) oder ältere Fassung des Maschinenraums
     docker: DockerLast | None = None     # leer: nicht gemessen (beobachtung.docker aus) oder ältere Fassung des Maschinenraums

@@ -168,6 +168,10 @@ export interface Nachbar {
    * Modell-Läufer auf diesem Rechner: angezeigt und beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse); leer: keiner
    */
   modell_laeufer: string | null;
+  /**
+   * Stellwerk auf diesem Rechner: im Takt der Beobachtung gelesen (nur lesend), damit die Prozesse seiner Apps weder als fremder Speicher noch als Fremdlast zählen und ihre Last der Leitstelle gemeldet wird; leer: keins
+   */
+  stellwerk: string | null;
 }
 /**
  * Schlaf des Rechners (macOS): der Leitstelle melden und, solange sie über ihn rechnen lässt, aufschieben.

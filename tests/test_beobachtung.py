@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
 
-from maschinenraum import beobachtung
+from maschinenraum import apps, beobachtung
 from maschinenraum.beobachtung import Beobachter, mit_eltern, programmname
 from maschinenraum.konfig import Einstellungen
 from maschinenraum.protokoll import Fremdart
@@ -92,6 +93,20 @@ def test_meldet_umgehungen_und_laesst_eigenes_weg(nachgestellt):
     speicher = [(z.wer, z.gb) for z in r.zugriffe if z.art == Fremdart.SPEICHER]
     # Läufer samt Kindern, Dienste, Ausnahmen (Browser) und Kleines fehlen; das Größte zuerst
     assert speicher == [("erzeugen.py", 17.0), ("uvicorn (pappagei)", 3.3)]
+
+
+def test_apps_des_stellwerks_sind_kein_fremder_speicher(nachgestellt, monkeypatch):
+    """Befund vom 27.10.2026: der Vektorspeicher des Fundus (ein nativer Teil im Stellwerk) stand als Speicher am Leitstand
+    vorbei. Prozesse, die das Stellwerk für seine Apps nennt, sind kein fremder Speicher. Spricht einer davon den Läufer
+    direkt an, bleibt das eine sichtbare Umgehung."""
+    stand = {"apps": [{"kennung": "medienpool", "name": "Medienpool", "teile": [
+        {"kennung": "erzeuger", "name": "Erzeuger", "art": "nativ", "pids": [960]},
+        {"kennung": "skript", "name": "Skript", "art": "nativ", "pids": [980]}]}]}
+    monkeypatch.setattr(apps, "_holen", lambda adresse: json.dumps(stand).encode())
+    b = _beobachter()
+    r = b.fremde(b.aufnehmen())
+    assert [(z.wer, z.gb) for z in r.zugriffe if z.art == Fremdart.SPEICHER] == [("uvicorn (pappagei)", 3.3)]
+    assert "skript.py" in {z.wer for z in r.zugriffe if z.art == Fremdart.LAEUFER}
 
 
 def test_ohne_lsof_ohne_aussage(nachgestellt, monkeypatch):

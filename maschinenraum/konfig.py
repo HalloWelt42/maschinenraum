@@ -76,6 +76,9 @@ class Schlaf(BaseModel):
 class Nachbar(BaseModel):
     modell_laeufer: str | None = Field(default="http://127.0.0.1:1234", description="Modell-Läufer auf diesem Rechner: angezeigt und "
                                        "beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse); leer: keiner")
+    stellwerk: str | None = Field(default="http://127.0.0.1:8550", description="Stellwerk auf diesem Rechner: im Takt der Beobachtung "
+                                  "gelesen (nur lesend), damit die Prozesse seiner Apps weder als fremder Speicher noch als Fremdlast "
+                                  "zählen und ihre Last der Leitstelle gemeldet wird; leer: keins")
 
 
 class Beobachtung(BaseModel):
