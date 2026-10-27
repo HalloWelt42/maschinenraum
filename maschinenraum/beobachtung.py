@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import ipaddress
 import os
-import re
 import shutil
 import socket
 import subprocess
@@ -29,7 +28,7 @@ from dataclasses import dataclass, field
 from time import monotonic
 from urllib.parse import urlparse
 
-from dienstkern.messen import GIB, Prozesstabelle, prozess_bytes
+from dienstkern.messen import GIB, Prozesstabelle, programmname, prozess_bytes
 
 from .apps import Appteil, Stellwerkleser, Stellwerkstand, zuordnen
 from .konfig import Einstellungen
@@ -124,28 +123,6 @@ def _adresse_von(url: str | None) -> str | None:
 
 def _kurz(befehl: str) -> str:
     return befehl if len(befehl) <= BEFEHL_HOECHSTENS else befehl[: BEFEHL_HOECHSTENS - 3] + "..."
-
-
-#: Programm in einem Paket des Mac: der Name nach Contents/MacOS/ bis zum ersten Schalter (Namen enthalten Leerzeichen)
-PAKET = re.compile(r"\.app/Contents/MacOS/(.+?)(?:\s+-|$)")
-
-
-def programmname(befehl: str) -> str:
-    """Lesbarer Name aus der Befehlszeile: bei Python und Node das Modul (-m) oder Skript statt des Interpreters, bei
-    einem Programm im Paket des Mac der ganze Name (auch mit Leerzeichen)."""
-    if paket := PAKET.search(befehl):
-        return paket.group(1).strip()
-    teile = befehl.split()
-    if not teile:
-        return ""
-    name = os.path.basename(teile[0])
-    if name.lower().startswith(("python", "node")):
-        for i, t in enumerate(teile[1:], start=1):
-            if t == "-m" and i + 1 < len(teile):
-                return teile[i + 1]
-            if t.endswith((".py", ".js", ".mjs")):
-                return os.path.basename(t)
-    return name
 
 
 def eigene_pids(dienste, tabelle: Prozesstabelle) -> set[int]:

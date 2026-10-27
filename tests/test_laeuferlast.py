@@ -30,14 +30,17 @@ MLX = f"{HEIM}/.lmstudio/models/mlx-community/Qwen3-8B-4bit/model.safetensors"
 RECHENWERK = f"{HEIM}/.lmstudio/extensions/backends/mlx-llm-mac-arm64-apple-metal-advsimd-1.11.0/libllm_engine.dylib"
 GGUF_RECHENWERK = f"{HEIM}/.lmstudio/extensions/backends/llama.cpp-mac-arm64-apple-metal-advsimd-2.47.0/libllama.dylib"
 
+#: Befehlszeile eines Arbeiters wie im echten Läufer: Node mit eingebettetem Programm (-e), daher heißt er "node"
+ARBEITER_BEFEHL = "/Users/a/.lmstudio/.internal/utils/node -e function connectPort(port) { const handlersMap = new Map(); }"
+
 #: zwei Momentaufnahmen, 15 s auseinander: Eltern, Befehlszeile und verbrauchte Rechenzeit je pid
 VORHER = {
     807: (1, "/Applications/LM Studio.app/Contents/MacOS/LM Studio", 100.0),        # Hauptprozess, lauscht am Port
-    808: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 1000.0),          # Arbeiter, bge-m3 (1)
-    809: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 2000.0),          # Arbeiter, bge-m3 (2)
+    808: (807, ARBEITER_BEFEHL, 1000.0),   # Arbeiter, bge-m3 (1)
+    809: (807, ARBEITER_BEFEHL, 2000.0),   # Arbeiter, bge-m3 (2)
     810: (807, "/Applications/LM Studio.app/Contents/Frameworks/LM Studio Helper (Renderer).app/Contents/MacOS/LM Studio Helper (Renderer)", 50.0),
-    811: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 10.0),            # Arbeiter, MLX
-    813: (807, "/Users/a/.lmstudio/.internal/utils/node worker", 400.0),           # Arbeiter ohne offene Modelldatei (Rechenwerk)
+    811: (807, ARBEITER_BEFEHL, 10.0),     # Arbeiter, MLX
+    813: (807, ARBEITER_BEFEHL, 400.0),    # Arbeiter ohne offene Modelldatei (Rechenwerk)
     950: (1, "/opt/python3 -m klangwerk hoeren --port 8783", 500.0),               # Dienst des Maschinenraums
     EIGEN: (1, "/opt/python3 -m maschinenraum", 30.0),
     4243: (EIGEN, "lsof -nP", 0.1),                                                  # Kind des Maschinenraums

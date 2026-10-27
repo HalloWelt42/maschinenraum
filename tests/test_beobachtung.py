@@ -6,9 +6,10 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from dienstkern.messen import programmname
 
 from maschinenraum import apps, beobachtung
-from maschinenraum.beobachtung import Beobachter, mit_eltern, programmname
+from maschinenraum.beobachtung import Beobachter, mit_eltern
 from maschinenraum.konfig import Einstellungen
 from maschinenraum.protokoll import Fremdart
 

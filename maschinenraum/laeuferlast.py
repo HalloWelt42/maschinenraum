@@ -32,10 +32,10 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from dienstkern.messen import GIB, prozess_bytes
+from dienstkern.messen import GIB, programmname, prozess_bytes
 
 from . import beobachtung
-from .beobachtung import Aufnahme, Beobachter, aufnehmen, mit_eltern, programmname
+from .beobachtung import Aufnahme, Beobachter, aufnehmen, mit_eltern
 from .konfig import Beobachtung, Einstellungen
 from .protokoll import AppsLast, AppTeil, BefehlErgebnis, Befehlsart, KnotenLast, Laeuferprozess, Laeuferrolle
 
