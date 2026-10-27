@@ -188,8 +188,8 @@ export interface Schlaf {
 /**
  * Was die Leitstelle über diesen Rechner zum Entscheiden braucht, im eigenen Takt: Zugriffe am Leitstand vorbei
  * (Verbindungen zum Modell-Läufer, die nicht vom Maschinenraum selbst kommen, und Programme mit viel Speicher außerhalb von
- * Diensten und Läufer) und die Last (je Prozess des Läufers und die Fremdlast des Rechners). Dazu, woran ein Arbeiter des
- * Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird.
+ * Diensten und Läufer) und die Last (je Prozess des Läufers, die Fremdlast des Rechners und der Docker-Rechner mit seinen
+ * Containern). Dazu, woran ein Arbeiter des Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird.
  *
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Beobachtung".
@@ -203,6 +203,10 @@ export interface Beobachtung {
    * Abstand der Beobachtungen; eigener Takt, weil eine Messung dauert
    */
   takt_s: number;
+  /**
+   * mit der Last die des Docker-Rechners melden: Kerne, Speicher und je Container Prozessorlast und Speicher (nur lesend über die Befehlszeile von Docker)
+   */
+  docker: boolean;
   /**
    * ab so viel Speicher gilt ein Programm als möglicher Modellträger
    */

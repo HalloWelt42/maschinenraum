@@ -180,7 +180,8 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten, nur mit Schlüssel |
 | `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner: angezeigt und beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse) |
 | `beobachtung` | `aktiv` | ja | der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie belastet Läufer und Rechner sind |
-| `beobachtung` | `takt_s` | 15 | Abstand der Beobachtungen, eigener Takt neben den Messwerten |
+| `beobachtung` | `takt_s` | 15 | Abstand der Beobachtungen, eigener Takt neben den Messwerten (von Beginn zu Beginn); zugleich die Frist für die Messung des Docker-Rechners |
+| `beobachtung` | `docker` | ja | mit der Last die des Docker-Rechners melden: Kerne, Speicher und je Container Prozessorlast und Speicher |
 | `beobachtung` | `schwelle_gb` | 2 | ab so viel Speicher gilt ein Programm außerhalb von Diensten und Läufer als möglicher Modellträger |
 | `beobachtung` | `ausnahmen` | Browser, virtuelle Maschinen | Teile der Befehlszeile, die nie als Speicherverbraucher gemeldet werden |
 | `beobachtung` | `modelldateien` | .gguf, .safetensors | Endungen von Modelldateien: ein Prozess des Läufers, der eine davon offen hat, ist ein Arbeiter |
@@ -221,7 +222,7 @@ Rechners zugreift:
 
 Gemessen wird mit `lsof` und der Prozesstabelle; ohne `lsof` meldet er, dass er nicht beobachten kann.
 
-## Last des Läufers und des Rechners
+## Last des Läufers, des Rechners und des Docker-Rechners
 
 Im selben Takt und aus derselben Aufnahme (ein Aufruf von `ps`, einer von `lsof` am Läufer-Port) meldet der
 Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus folgt, entscheidet die Leitstelle.
@@ -235,11 +236,21 @@ Maschinenraum der Leitstelle die Last (`knoten.last`). Er misst nur; was daraus 
 - Die Fremdlast des Rechners: die Prozessorlast aller übrigen Prozesse, ohne Läufer, ohne Dienste und ohne den
   Maschinenraum selbst, als Anteil aller Kerne. Das ist die Last, die der Mensch und seine übrigen Programme erzeugen;
   drosselt die Leitstelle danach ihre Hintergrundarbeit, schaukelt sie sich nicht an der eigenen Last auf.
+- Der Docker-Rechner (`docker`, abschaltbar mit `beobachtung.docker`): seine Kerne und sein Speicher und je laufendem
+  Container Name, Compose-Projekt (Label `com.docker.compose.project`), Prozessorlast in Prozent eines Kerns (wie
+  `docker stats`) und belegter Speicher. Auf dem Mac laufen die Container in einer virtuellen Maschine, die dort als ein
+  einziger Prozess erscheint; was darin welcher Container rechnet, weiß nur Docker. Gemessen wird darum mit
+  `docker info`, `docker ps` und `docker stats --no-stream`, nur lesend und nur mit `--format` nach den nötigen Feldern
+  (nie die Umgebung der Container). Die drei laufen nebeneinander in einem eigenen Faden neben der Aufnahme und dürfen
+  zusammen höchstens einen Takt dauern; `docker stats` braucht ein bis zwei Sekunden, bei voll ausgelastetem
+  Docker-Rechner auch vier bis sieben. Ohne Docker, wenn es nicht antwortet oder ein Aufruf scheitert, ist dort
+  `gemessen` falsch und die übrigen Felder sagen nichts. Verwaltet wird Docker weiter vom Stellwerk.
 
 Prozessorlast zählt zeitbasiert: verbrauchte Rechenzeit seit der letzten Messung je Wandzeit, beim Läufer in Prozent
 eines Kerns. Die erste Messung nach dem Verbinden und neue Prozesse haben noch keinen Wert. Ohne `lsof` oder ohne
 eingetragenen Läufer sagt die Liste der Läufer-Prozesse nichts (`gemessen` falsch); ohne `lsof` fehlt auch die
-Fremdlast, denn dann ist der Läufer nicht herauszurechnen.
+Fremdlast, denn dann ist der Läufer nicht herauszurechnen. Das Feld `docker` ist neu (seit 0.16.0) und darf fehlen:
+eine Leitstelle, die es noch nicht kennt, übergeht es.
 
 Auf Befehl der Leitstelle (`laeufer_prozess_beenden` mit der Prozessnummer) beendet der Maschinenraum einen Arbeiter
 des Läufers, der ohne Auftrag rechnet. Vorher prüft er frisch, dass der Prozess gerade ein Arbeiter ist; den

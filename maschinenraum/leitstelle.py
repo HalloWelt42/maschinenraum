@@ -2,7 +2,7 @@
 
 Nach dem Verbinden: `knoten.anmelden`, dann Messwerte im Takt, die Dienstliste bei jeder Änderung (und
 spätestens alle zehn Takte), im ruhigeren Takt der Beobachtung Zugriffe am Leitstand vorbei (`knoten.fremde`) und die
-Last von Läufer und Rechner (`knoten.last`), und Antworten auf Befehle. Ohne Verbindung arbeitet der Maschinenraum
+Last von Läufer, Rechner und Docker-Rechner (`knoten.last`), und Antworten auf Befehle. Ohne Verbindung arbeitet der Maschinenraum
 unverändert weiter. Der Zustand der Verbindung ist für die Oberfläche lesbar.
 
 Schlaf (schlaf.py meldet ihn): vor dem Einschlafen `knoten.schlaeft`, höchstens `VERMERK_S` auf
@@ -32,6 +32,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .beobachtung import Beobachter
 from . import __version__
+from .dockerlast import Dockermesser
 from .konfig import Ordner
 from .laeuferlast import Laeuferaufsicht, Lastmesser
 from .messen import Messer
@@ -261,23 +262,30 @@ class Leitstellenkanal:
                 await asyncio.sleep(0.2)                     # mehrere Änderungen kurz hintereinander zusammenfassen
 
     async def _beobachten_im_takt(self, senden) -> None:
-        """Zugriffe am Leitstand vorbei und Last von Läufer und Rechner in eigenem, ruhigerem Takt: die Messung dauert
-        (lsof) und darf Messwerte und Dienstliste nicht aufhalten. Beide nutzen eine Aufnahme je Takt. Gemessen wird erst,
-        wenn der Start alle laufenden Dienste übernommen hat; vorher hielte die Beobachtung sie für fremd. Der Lastmesser
-        gilt je Verbindung (die erste Messung danach hat noch keine Prozente). Ein Fehler der Beobachtung trennt die
-        Verbindung nicht."""
+        """Zugriffe am Leitstand vorbei und Last von Läufer, Rechner und Docker-Rechner in eigenem, ruhigerem Takt: die
+        Messung dauert (lsof, docker) und darf Messwerte und Dienstliste nicht aufhalten. Zugriffe und Last des Läufers
+        nutzen eine Aufnahme je Takt; der Docker-Rechner wird im eigenen Faden daneben gemessen (seine Aufrufe dauern ein
+        bis zwei Sekunden, unter Last länger, höchstens einen Takt) und kommt in dieselbe Meldung. Der Takt zählt von
+        Beginn zu Beginn, damit eine lange Messung den Abstand der Meldungen nicht dehnt. Gemessen wird erst, wenn der
+        Start alle laufenden Dienste übernommen hat; vorher hielte die Beobachtung sie für fremd. Die Messer gelten je
+        Verbindung (die erste Messung danach hat noch keine Prozente). Ein Fehler der Beobachtung trennt die Verbindung
+        nicht."""
         await self.verwalter.hochgefahren.wait()
         lastmesser = Lastmesser(lambda: self.verwalter.einstellungen)
+        dockermesser = Dockermesser(lambda: self.verwalter.einstellungen)
         while True:
+            beginn = time.monotonic()
             try:
-                fremde, last = await asyncio.to_thread(self._beobachten, lastmesser)
+                (fremde, last), docker = await asyncio.gather(asyncio.to_thread(self._beobachten, lastmesser),
+                                                              asyncio.to_thread(dockermesser.messen))
+                last.docker = docker
                 await senden(_umschlag("knoten.fremde", fremde))
                 await senden(_umschlag("knoten.last", last))
             except asyncio.CancelledError:
                 raise
             except Exception:
-                log.exception("Beobachtung (am Leitstand vorbei, Last) gescheitert")
-            await asyncio.sleep(self.verwalter.einstellungen.beobachtung.takt_s)
+                log.exception("Beobachtung (am Leitstand vorbei, Last, Docker-Rechner) gescheitert")
+            await asyncio.sleep(max(0.0, self.verwalter.einstellungen.beobachtung.takt_s - (time.monotonic() - beginn)))
 
     def _beobachten(self, lastmesser: Lastmesser) -> tuple[Fremdzugriffe, KnotenLast]:
         aufnahme = self.beobachter.aufnehmen()

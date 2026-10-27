@@ -11,7 +11,7 @@ schluessel_orte:
   - "Mac: `~/Maschinenraum/schluessel`, Modus 0600: Schlüssel des Knotens bei der Leitstelle, zugleich Zugang der Durchleitung"
   - "Leitstelle: das Gegenstück unter Knoten (im Tresor der Leitstelle)"
 einrichten: einrichten.sh
-stand: cdd9903
+stand: 33d0073
 ---
 
 # Maschinenraum
@@ -27,8 +27,9 @@ Last, startet ihn nach einem Absturz begrenzt neu und hält ihn an. Als Knoten-A
 gemessenen Speicher des Macs und nimmt ihre Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er
 ihre Anfragen roh an seine Dienste weiter. Er meldet ihr außerdem, was an ihr vorbei auf Modelle des Macs zugreift (fremde Verbindungen
 zum Läufer, große Speicherverbraucher außerhalb der Dienste), und die Last: je Prozess des Läufers (Rolle, Modelldatei,
-Kerne, Speicher) und die Fremdlast des Macs ohne Läufer und Dienste. Auf ihren Befehl beendet er einen Arbeiter des
-Läufers, der ohne Auftrag rechnet, nie den Hauptprozess.
+Kerne, Speicher), die Fremdlast des Macs ohne Läufer und Dienste und den Docker-Rechner mit Kernen, Speicher und der
+Last je Container (nur lesend gemessen, verwaltet wird Docker vom [[Stellwerk]]). Auf ihren Befehl beendet er einen
+Arbeiter des Läufers, der ohne Auftrag rechnet, nie den Hauptprozess.
 
 Ohne Maschinenraum hört und spricht im Verbund niemand: die Leitstelle kann die Sprachdienste am Mac weder starten
 noch erreichen.
@@ -111,3 +112,7 @@ dauert aber Stunden. Zurückspielen: den Ordner an seinen Ort legen (Modus 700, 
   oder die Beobachtung ist aus (`beobachtung.aktiv`). Erkennt sie Arbeiter nicht, passen weder die Endungen in
   `beobachtung.modelldateien` zu den Modelldateien des Läufers noch die Ordnerteile in
   `beobachtung.arbeiter_bibliotheken` zu den Bibliotheken seiner Rechenwerke (`lsof -p <pid> | grep txt` zeigt sie).
+- Die Leitstelle zeigt beim Mac keinen Docker-Rechner: Docker läuft nicht, `docker` liegt nicht im Suchpfad des
+  launchd-Dienstes (`/usr/local/bin` und `/opt/homebrew/bin` sind darin), `beobachtung.docker` ist aus, oder Docker
+  antwortet langsamer als ein Takt der Beobachtung (`beobachtung.takt_s` erhöhen). Den Grund nennt
+  `~/Maschinenraum/protokolle/start.log` einmal je Wechsel ("Docker-Rechner nicht gemessen: ...").

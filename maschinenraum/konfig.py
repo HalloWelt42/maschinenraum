@@ -81,12 +81,14 @@ class Nachbar(BaseModel):
 class Beobachtung(BaseModel):
     """Was die Leitstelle über diesen Rechner zum Entscheiden braucht, im eigenen Takt: Zugriffe am Leitstand vorbei
     (Verbindungen zum Modell-Läufer, die nicht vom Maschinenraum selbst kommen, und Programme mit viel Speicher außerhalb von
-    Diensten und Läufer) und die Last (je Prozess des Läufers und die Fremdlast des Rechners). Dazu, woran ein Arbeiter des
-    Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird."""
+    Diensten und Läufer) und die Last (je Prozess des Läufers, die Fremdlast des Rechners und der Docker-Rechner mit seinen
+    Containern). Dazu, woran ein Arbeiter des Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird."""
 
     aktiv: bool = Field(default=True, description="der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie "
                                                    "belastet Läufer und Rechner sind")
     takt_s: float = Field(default=15, ge=5, le=600, description="Abstand der Beobachtungen; eigener Takt, weil eine Messung dauert")
+    docker: bool = Field(default=True, description="mit der Last die des Docker-Rechners melden: Kerne, Speicher und je Container "
+                                                    "Prozessorlast und Speicher (nur lesend über die Befehlszeile von Docker)")
     schwelle_gb: float = Field(default=2.0, ge=0.5, le=512, description="ab so viel Speicher gilt ein Programm als möglicher Modellträger")
     ausnahmen: list[str] = Field(default_factory=lambda: ["com.apple.Virtualization", "Google Chrome", "Brave Browser", "Safari.app", "firefox",
                                                           "Xcode", "WindowServer", "Claude.app", "Code Helper", "JetBrains", "Docker"],

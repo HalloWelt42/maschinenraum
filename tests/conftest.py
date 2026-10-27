@@ -1,5 +1,6 @@
 """Gemeinsam für alle Tests: kein Test meldet sich bei der echten Energieverwaltung an (Schein-IOKit statt ctypes).
-Nur die Rauchprobe in test_schlaf.py nimmt die echte Bibliothek, ausdrücklich."""
+Nur die Rauchprobe in test_schlaf.py nimmt die echte Bibliothek, ausdrücklich. Kein Test ruft das echte Docker auf: ohne
+Nachstellung gibt es für die Tests kein docker (test_dockerlast.py stellt die Ausgaben nach)."""
 
 from __future__ import annotations
 
@@ -7,7 +8,7 @@ import threading
 
 import pytest
 
-from maschinenraum import schlaf
+from maschinenraum import dockerlast, schlaf
 
 
 class ScheinIOKit:
@@ -78,3 +79,9 @@ def schein_energie(monkeypatch):
     io, cf = ScheinIOKit(), ScheinCoreFoundation()
     monkeypatch.setattr(schlaf, "bibliotheken", lambda: (io, cf, 0))
     return io, cf
+
+
+@pytest.fixture(autouse=True)
+def kein_echtes_docker(monkeypatch):
+    """Jede Messung des Docker-Rechners, die ein Test auslöst, findet kein docker, statt das echte zu fragen."""
+    monkeypatch.setattr(dockerlast, "_aufrufen", lambda befehle, frist_s: None)

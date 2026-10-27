@@ -187,12 +187,33 @@ class Laeuferprozess(BaseModel):
     gb: float | None = None           # Speicher wie bei den Diensten
 
 
+class DockerContainer(BaseModel):
+    """Ein laufender Container im Docker-Rechner."""
+
+    name: str
+    projekt: str = ""                 # Compose-Projekt (Label com.docker.compose.project); leer: ohne Compose gestartet
+    cpu_prozent: float | None = None  # Prozent eines Kerns des Docker-Rechners, wie docker stats; leer, wenn Docker keinen Wert hat
+    gb: float | None = None           # belegter Speicher
+
+
+class DockerLast(BaseModel):
+    """Last des Docker-Rechners (die virtuelle Maschine, in der die Container laufen; auf dem Rechner selbst erscheint sie
+    als ein Prozess). `gemessen` ist falsch ohne Docker oder wenn es nicht antwortet; dann sagen die übrigen Felder
+    nichts (statt "keine Container")."""
+
+    gemessen: bool = True
+    kerne: int | None = None          # Kerne des Docker-Rechners
+    speicher_gb: float | None = None  # Speicher des Docker-Rechners
+    container: list[DockerContainer] = Field(default_factory=list)
+
+
 class KnotenLast(BaseModel):
-    """`knoten.last`: Last des Modell-Läufers je Prozess und die Fremdlast des Rechners, im Takt der Beobachtung.
-    Zeitbasiert (Rechenzeit je Wandzeit), nicht mit `cpu_prozent` der Messwerte zu mischen. `gemessen` ist falsch ohne
-    lsof oder ohne Läufer-Port; dann sagt `laeufer` nichts (statt "keine Prozesse")."""
+    """`knoten.last`: Last des Modell-Läufers je Prozess, die Fremdlast des Rechners und die Last des Docker-Rechners, im
+    Takt der Beobachtung. Zeitbasiert (Rechenzeit je Wandzeit), nicht mit `cpu_prozent` der Messwerte zu mischen.
+    `gemessen` ist falsch ohne lsof oder ohne Läufer-Port; dann sagt `laeufer` nichts (statt "keine Prozesse")."""
 
     gemessen: bool = True
     kerne: int                        # logische Kerne des Rechners
     laeufer: list[Laeuferprozess] = Field(default_factory=list)
     fremd_prozent: float | None = None   # Last ohne Läufer und ohne Dienste des Maschinenraums, Anteil aller Kerne (0 bis 100); leer beim ersten Mal
+    docker: DockerLast | None = None     # leer: nicht gemessen (beobachtung.docker aus) oder ältere Fassung des Maschinenraums
