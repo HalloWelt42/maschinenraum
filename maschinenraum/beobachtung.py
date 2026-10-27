@@ -10,17 +10,22 @@ Zwei Arten (Grundsatz des Nutzers: alles nur über die Leitstelle; was daran vor
 
 Gemessen mit lsof (Verbindungen) und der Prozesstabelle samt Speicher je Prozess aus dem Dienstkern. Ohne lsof bleibt
 die Beobachtung aus und meldet das, statt eine leere Liste als "nichts gefunden" auszugeben.
+
+Je Takt wird einmal aufgenommen (`Aufnahme`: Prozesstabelle, Verbindungen am Läufer-Port); daraus entstehen die
+Zugriffe am Leitstand vorbei hier und die Last von Läufer und Rechner in `laeuferlast.py`.
 """
 
 from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import shutil
 import socket
 import subprocess
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from time import monotonic
 from urllib.parse import urlparse
 
 from dienstkern.messen import GIB, Prozesstabelle, prozess_bytes
@@ -119,8 +124,15 @@ def _kurz(befehl: str) -> str:
     return befehl if len(befehl) <= BEFEHL_HOECHSTENS else befehl[: BEFEHL_HOECHSTENS - 3] + "..."
 
 
+#: Programm in einem Paket des Mac: der Name nach Contents/MacOS/ bis zum ersten Schalter (Namen enthalten Leerzeichen)
+PAKET = re.compile(r"\.app/Contents/MacOS/(.+?)(?:\s+-|$)")
+
+
 def programmname(befehl: str) -> str:
-    """Lesbarer Name aus der Befehlszeile: bei Python und Node das Modul (-m) oder Skript statt des Interpreters."""
+    """Lesbarer Name aus der Befehlszeile: bei Python und Node das Modul (-m) oder Skript statt des Interpreters, bei
+    einem Programm im Paket des Mac der ganze Name (auch mit Leerzeichen)."""
+    if paket := PAKET.search(befehl):
+        return paket.group(1).strip()
     teile = befehl.split()
     if not teile:
         return ""
@@ -159,9 +171,36 @@ def mit_eltern(name: str, pid: int, tabelle: Prozesstabelle) -> str:
     return f"{name} ({vater})" if vater and vater != name and vater not in NICHTSSAGENDE_ELTERN else name
 
 
+@dataclass
+class Aufnahme:
+    """Was ein Takt einmal misst und Zugriffe am Leitstand vorbei wie Last gemeinsam nutzen: die Prozesstabelle (ein
+    Aufruf von ps) und die Verbindungen am Läufer-Port samt lauschendem Prozess (ein Aufruf von lsof)."""
+
+    tabelle: Prozesstabelle
+    zeit_s: float                                       # time.monotonic() der Prozesstabelle
+    port: int | None                                    # Port des Modell-Läufers; None: keiner eingetragen
+    laeufer_gesehen: bool                               # Port eingetragen und mit lsof gelesen; sonst sagt der Läufer-Teil nichts
+    verbindungen: list[Verbindung] = field(default_factory=list)
+    lauschend: set[int] = field(default_factory=set)    # Hauptprozess des Läufers (lauscht am Port)
+    laeufer_pids: set[int] = field(default_factory=set) # lauschende Prozesse samt Nachfahren
+    eigene: set[int] = field(default_factory=set)       # Dienste des Maschinenraums und er selbst samt Nachfahren
+
+
+def aufnehmen(einstellungen: Einstellungen, dienste: Iterable) -> Aufnahme:
+    """Eine Aufnahme jetzt (auch ohne aktive Beobachtung, etwa für die Prüfung vor dem Beenden eines Arbeiters)."""
+    port = urlparse(einstellungen.nachbar.modell_laeufer or "").port
+    tabelle, zeit_s = Prozesstabelle(), monotonic()
+    gelesen = verbindungen_lesen(port) if port else None
+    verbindungen, lauschend = gelesen if gelesen is not None else ([], set())
+    return Aufnahme(tabelle=tabelle, zeit_s=zeit_s, port=port, laeufer_gesehen=gelesen is not None,
+                    verbindungen=verbindungen, lauschend=lauschend,
+                    laeufer_pids={p for server in lauschend for p in tabelle.mit_nachfahren(server)},
+                    eigene=eigene_pids(dienste, tabelle) | set(tabelle.mit_nachfahren(os.getpid())))
+
+
 class Beobachter:
-    """Misst im Takt der Messung, was am Leitstand vorbei auf Modelle dieses Rechners zugreift. Einstellungen und Dienste
-    werden je Messung abgerufen (die Oberfläche kann beide ändern)."""
+    """Misst im Takt der Beobachtung, was am Leitstand vorbei auf Modelle dieses Rechners zugreift. Einstellungen und
+    Dienste werden je Messung abgerufen (die Oberfläche kann beide ändern)."""
 
     def __init__(self, einstellungen: Callable[[], Einstellungen], dienste: Callable[[], Iterable]) -> None:
         self._einstellungen = einstellungen
@@ -171,27 +210,25 @@ class Beobachter:
     def einstellungen(self) -> Einstellungen:
         return self._einstellungen()
 
-    def messen(self) -> Fremdzugriffe:
+    def aufnehmen(self) -> Aufnahme | None:
+        """Die Aufnahme dieses Takts; None, wenn die Beobachtung abgeschaltet ist (dann wird gar nicht gemessen)."""
         e = self.einstellungen
-        if not e.beobachtung.aktiv:
+        return aufnehmen(e, self.dienste()) if e.beobachtung.aktiv else None
+
+    def fremde(self, a: Aufnahme | None) -> Fremdzugriffe:
+        """Zugriffe am Leitstand vorbei aus der Aufnahme. Ohne Aufnahme oder, bei eingetragenem Läufer, ohne lsof ohne
+        Aussage."""
+        if a is None or (a.port and not a.laeufer_gesehen):
             return Fremdzugriffe(beobachtet=False)
-        laeufer = urlparse(e.nachbar.modell_laeufer or "")
-        tabelle = Prozesstabelle()
         zugriffe: list[Fremdzugriff] = []
-        laeufer_pids: set[int] = set()
-        if laeufer.port:
-            gelesen = verbindungen_lesen(laeufer.port)
-            if gelesen is None:
-                return Fremdzugriffe(beobachtet=False)
-            verbindungen, lauschend = gelesen
-            laeufer_pids = {p for server in lauschend for p in tabelle.mit_nachfahren(server)}
-            zugriffe += self._laeuferzugriffe(verbindungen, laeufer.port, laeufer_pids, tabelle)
-        zugriffe += self._speicherzugriffe(tabelle, laeufer_pids | eigene_pids(self.dienste(), tabelle) | {os.getpid()})
+        if a.port:
+            zugriffe += self._laeuferzugriffe(a.verbindungen, a.port, a.laeufer_pids, a.tabelle)
+        zugriffe += self._speicherzugriffe(a.tabelle, a.laeufer_pids | a.eigene | {os.getpid()})
         ordner = arbeitsordner(z.pid for z in zugriffe if z.pid)
         for z in zugriffe:
             if z.pid:
                 z.ordner = ordner.get(z.pid, "")
-                z.wer = mit_eltern(z.wer, z.pid, tabelle)
+                z.wer = mit_eltern(z.wer, z.pid, a.tabelle)
         return Fremdzugriffe(zugriffe=zugriffe)
 
     def _laeuferzugriffe(self, verbindungen: list[Verbindung], port: int, laeufer_pids: set[int], tabelle: Prozesstabelle) -> list[Fremdzugriff]:

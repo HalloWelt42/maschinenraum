@@ -25,7 +25,9 @@ eigener Prozessgruppe, prüft, ob er antwortet, misst Speicher und Last, startet
 und hält ihn an. Als Knoten-Agent der [[Leitstelle]] meldet er den gemessenen Speicher des Macs und nimmt ihre
 Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er ihre Anfragen roh an die Dienste und an
 den Modell-Läufer weiter. Er meldet ihr außerdem, was an ihr vorbei auf Modelle des Macs zugreift (fremde Verbindungen
-zum Läufer, große Speicherverbraucher außerhalb der Dienste).
+zum Läufer, große Speicherverbraucher außerhalb der Dienste), und die Last: je Prozess des Läufers (Rolle, Modelldatei,
+Kerne, Speicher) und die Fremdlast des Macs ohne Läufer und Dienste. Auf ihren Befehl beendet er einen Arbeiter des
+Läufers, der ohne Auftrag rechnet, nie den Hauptprozess.
 
 Ohne Maschinenraum hört und spricht im Verbund niemand: die Leitstelle kann die Sprachdienste am Mac weder starten
 noch erreichen.
@@ -101,3 +103,6 @@ dauert aber Stunden. Zurückspielen: den Ordner an seinen Ort legen (Modus 700, 
 - Nach einer Installation reagiert nichts: `launchctl print gui/$(id -u)/maschinenraum` und
   `~/Maschinenraum/protokolle/start.log` ansehen.
 - Das Symbol fehlt in der Menüleiste: `swiftc` fehlte bei der Installation (Xcode), dann erneut installieren.
+- Die Leitstelle zeigt beim Mac keine Läufer-Prozesse: `lsof` fehlt, kein Läufer eingetragen (`nachbar.modell_laeufer`)
+  oder die Beobachtung ist aus (`beobachtung.aktiv`). Erkennt sie Arbeiter nicht, passen die Endungen in
+  `beobachtung.modelldateien` nicht zu den Modelldateien des Läufers.

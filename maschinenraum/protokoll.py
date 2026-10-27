@@ -112,10 +112,11 @@ class Dienstliste(BaseModel):
 class Befehlsart(str, Enum):
     DIENST_STARTEN = "dienst_starten"
     DIENST_ANHALTEN = "dienst_anhalten"
+    LAEUFER_PROZESS_BEENDEN = "laeufer_prozess_beenden"   # ziel: pid eines Arbeiters des Modell-Läufers; nie der Hauptprozess
 
 
 class Befehl(BaseModel):
-    """`knoten.befehl`: begrenzt auf die Dienstverwaltung."""
+    """`knoten.befehl`: begrenzt auf die Dienstverwaltung und das Beenden eines Arbeiters des Modell-Läufers."""
 
     befehl: Befehlsart
     ziel: str
@@ -167,3 +168,31 @@ class Fremdzugriffe(BaseModel):
 
     beobachtet: bool = True
     zugriffe: list[Fremdzugriff] = Field(default_factory=list)
+
+
+class Laeuferrolle(str, Enum):
+    HAUPT = "haupt"                   # lauscht am Port des Läufers; wird nie beendet
+    ARBEITER = "arbeiter"             # hat eine Modelldatei offen: eine geladene Instanz
+    SONSTIG = "sonstig"               # alles andere im Baum des Läufers, etwa das Fenster
+
+
+class Laeuferprozess(BaseModel):
+    """Ein Prozess des Modell-Läufers (der Prozess am Läufer-Port samt Nachfahren)."""
+
+    pid: int
+    name: str                         # Programmname wie bei der Beobachtung
+    rolle: Laeuferrolle
+    modelldatei: str = ""             # bei arbeiter: die offene Modelldatei (Pfad, ~ für den Heimordner); sonst leer
+    cpu_prozent: float | None = None  # Rechenzeit seit der letzten Messung je Wandzeit, in Prozent eines Kerns; leer beim ersten Mal und bei neuer pid
+    gb: float | None = None           # Speicher wie bei den Diensten
+
+
+class KnotenLast(BaseModel):
+    """`knoten.last`: Last des Modell-Läufers je Prozess und die Fremdlast des Rechners, im Takt der Beobachtung.
+    Zeitbasiert (Rechenzeit je Wandzeit), nicht mit `cpu_prozent` der Messwerte zu mischen. `gemessen` ist falsch ohne
+    lsof oder ohne Läufer-Port; dann sagt `laeufer` nichts (statt "keine Prozesse")."""
+
+    gemessen: bool = True
+    kerne: int                        # logische Kerne des Rechners
+    laeufer: list[Laeuferprozess] = Field(default_factory=list)
+    fremd_prozent: float | None = None   # Last ohne Läufer und ohne Dienste des Maschinenraums, Anteil aller Kerne (0 bis 100); leer beim ersten Mal

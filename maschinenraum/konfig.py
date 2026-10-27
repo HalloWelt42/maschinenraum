@@ -83,15 +83,32 @@ class Nachbar(BaseModel):
 
 
 class Beobachtung(BaseModel):
-    """Zugriffe am Leitstand vorbei melden: Verbindungen zum Modell-Läufer, die nicht über die Durchleitung kommen, und
-    Programme mit viel Speicher außerhalb von Diensten und Läufer (etwa ein Modell im eigenen Prozess)."""
+    """Was die Leitstelle über diesen Rechner zum Entscheiden braucht, im eigenen Takt: Zugriffe am Leitstand vorbei
+    (Verbindungen zum Modell-Läufer, die nicht über die Durchleitung kommen, und Programme mit viel Speicher außerhalb von
+    Diensten und Läufer) und die Last (je Prozess des Läufers und die Fremdlast des Rechners). Dazu, woran ein Arbeiter des
+    Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird."""
 
-    aktiv: bool = Field(default=True, description="der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift")
+    aktiv: bool = Field(default=True, description="der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie "
+                                                   "belastet Läufer und Rechner sind")
     takt_s: float = Field(default=15, ge=5, le=600, description="Abstand der Beobachtungen; eigener Takt, weil eine Messung dauert")
     schwelle_gb: float = Field(default=2.0, ge=0.5, le=512, description="ab so viel Speicher gilt ein Programm als möglicher Modellträger")
     ausnahmen: list[str] = Field(default_factory=lambda: ["com.apple.Virtualization", "Google Chrome", "Brave Browser", "Safari.app", "firefox",
                                                           "Xcode", "WindowServer", "Claude.app", "Code Helper", "JetBrains", "Docker"],
                                  description="Teile der Befehlszeile, die nie als Speicherverbraucher gemeldet werden (Browser, virtuelle Maschinen)")
+    modelldateien: list[str] = Field(default_factory=lambda: [".gguf", ".safetensors"], min_length=1,
+                                     description="Endungen von Modelldateien: ein Prozess des Läufers, der eine davon offen hat, ist ein "
+                                                 "Arbeiter (eine geladene Instanz)")
+    anhaltezeit_s: float = Field(default=10, ge=1, le=120, description="so lange darf ein Arbeiter des Läufers nach der Bitte um Beenden "
+                                                                     "aufräumen, dann wird er hart beendet")
+
+    @field_validator("modelldateien")
+    @classmethod
+    def _endungen(cls, werte: list[str]) -> list[str]:
+        """Nur echte Endungen (".gguf"): eine leere passte auf jede Datei, und jeder Prozess des Läufers wäre ein Arbeiter."""
+        falsch = [w for w in werte if len(w) < 2 or not w.startswith(".") or w.strip() != w]
+        if falsch:
+            raise ValueError(f"Endungen mit Punkt und ohne Leerzeichen (.gguf, .safetensors), nicht {', '.join(repr(w) for w in falsch)}")
+        return werte
 
 
 class Einstellungen(BaseModel):

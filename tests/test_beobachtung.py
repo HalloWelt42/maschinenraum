@@ -78,7 +78,8 @@ def _beobachter() -> Beobachter:
 
 
 def test_meldet_umgehungen_und_laesst_eigenes_weg(nachgestellt):
-    r = _beobachter().messen()
+    b = _beobachter()
+    r = b.fremde(b.aufnehmen())
     assert r.beobachtet
     laeufer = {z.wer: z for z in r.zugriffe if z.art == Fremdart.LAEUFER}
     # aus dem Netz je Adresse gezählt; der Rechner der Leitstelle ist kenntlich (auf dem direkten Weg ist sie es selbst)
@@ -95,13 +96,15 @@ def test_meldet_umgehungen_und_laesst_eigenes_weg(nachgestellt):
 
 def test_ohne_lsof_ohne_aussage(nachgestellt, monkeypatch):
     monkeypatch.setattr(beobachtung, "_lsof", lambda *args: None)
-    assert _beobachter().messen().beobachtet is False
+    b = _beobachter()
+    assert b.fremde(b.aufnehmen()).beobachtet is False
 
 
 def test_abgeschaltet(nachgestellt):
     b = _beobachter()
     b.einstellungen.beobachtung.aktiv = False
-    r = b.messen()
+    assert b.aufnehmen() is None
+    r = b.fremde(None)
     assert r.beobachtet is False and r.zugriffe == []
 
 
@@ -110,6 +113,9 @@ def test_namen():
     assert programmname("/usr/bin/python3 /pfad/zum/erzeugen.py --x") == "erzeugen.py"
     assert programmname("/Users/a/.lmstudio/.internal/utils/node /pfad/worker.js") == "worker.js"
     assert programmname("/Applications/pappagei.app/Contents/MacOS/pappagei") == "pappagei"
+    assert programmname("/Applications/Mein Läufer.app/Contents/MacOS/Mein Läufer") == "Mein Läufer"
+    assert programmname("/Applications/A B.app/Contents/Frameworks/A B Helper (Renderer).app/Contents/MacOS/A B Helper (Renderer) --type=renderer") \
+        == "A B Helper (Renderer)"
     t = Tabelle()
     assert mit_eltern("uvicorn", 901, t) == "uvicorn (pappagei)"
     assert mit_eltern("klangwerk", 950, t) == "klangwerk"                 # vom System gestartet: nichts dazu

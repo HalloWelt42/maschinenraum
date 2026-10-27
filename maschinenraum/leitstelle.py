@@ -1,7 +1,8 @@
 """Verbindung zur Leitstelle (optional): ausgehend, mit Schlüssel, mit wachsender Pause bei Abbruch.
 
 Nach dem Verbinden: `knoten.anmelden`, dann Messwerte im Takt, die Dienstliste bei jeder Änderung (und
-spätestens alle zehn Takte) und Antworten auf Befehle. Ohne Verbindung arbeitet der Maschinenraum
+spätestens alle zehn Takte), im ruhigeren Takt der Beobachtung Zugriffe am Leitstand vorbei (`knoten.fremde`) und die
+Last von Läufer und Rechner (`knoten.last`), und Antworten auf Befehle. Ohne Verbindung arbeitet der Maschinenraum
 unverändert weiter. Der Zustand der Verbindung ist für die Oberfläche lesbar.
 
 Schlaf (schlaf.py meldet ihn): vor dem Einschlafen `knoten.schlaeft`, höchstens `VERMERK_S` auf
@@ -26,13 +27,15 @@ from typing import Any
 from uuid import uuid4
 
 import websockets
+import websockets.exceptions
 from pydantic import BaseModel, Field, ValidationError
 
 from .beobachtung import Beobachter
 from . import __version__
 from .konfig import Ordner
+from .laeuferlast import Laeuferaufsicht, Lastmesser
 from .messen import Messer
-from .protokoll import Befehl, KnotenAnmeldung, KnotenSchlaeft, Schlafgrund
+from .protokoll import Befehl, Befehlsart, Fremdzugriffe, KnotenAnmeldung, KnotenLast, KnotenSchlaeft, Schlafgrund
 from .prozesse import Verwalter
 
 log = logging.getLogger("maschinenraum")
@@ -82,6 +85,7 @@ class Leitstellenkanal:
     def __init__(self, ordner: Ordner, verwalter: Verwalter, messer: Messer) -> None:
         self.ordner, self.verwalter, self.messer = ordner, verwalter, messer
         self.beobachter = Beobachter(lambda: self.verwalter.einstellungen, lambda: self.verwalter.dienste.values())
+        self.laeuferaufsicht = Laeuferaufsicht(self.beobachter)
         self.stand = LeitstellenStand(adresse=None, zustand=Verbindung.AUS)
         self._aufgabe: asyncio.Task | None = None
         self._ws: Any = None                         # die laufende Verbindung: Schlaf melden, beim Aufwachen schließen
@@ -257,16 +261,25 @@ class Leitstellenkanal:
                 await asyncio.sleep(0.2)                     # mehrere Änderungen kurz hintereinander zusammenfassen
 
     async def _beobachten_im_takt(self, senden) -> None:
-        """Zugriffe am Leitstand vorbei in eigenem, ruhigerem Takt: die Messung dauert (lsof) und darf Messwerte und
-        Dienstliste nicht aufhalten. Ein Fehler der Beobachtung trennt die Verbindung nicht."""
+        """Zugriffe am Leitstand vorbei und Last von Läufer und Rechner in eigenem, ruhigerem Takt: die Messung dauert
+        (lsof) und darf Messwerte und Dienstliste nicht aufhalten. Beide nutzen eine Aufnahme je Takt. Der Lastmesser gilt
+        je Verbindung (die erste Messung danach hat noch keine Prozente). Ein Fehler der Beobachtung trennt die Verbindung
+        nicht."""
+        lastmesser = Lastmesser(lambda: self.verwalter.einstellungen)
         while True:
             try:
-                await senden(_umschlag("knoten.fremde", await asyncio.to_thread(self.beobachter.messen)))
+                fremde, last = await asyncio.to_thread(self._beobachten, lastmesser)
+                await senden(_umschlag("knoten.fremde", fremde))
+                await senden(_umschlag("knoten.last", last))
             except asyncio.CancelledError:
                 raise
             except Exception:
-                log.exception("Beobachtung am Leitstand vorbei gescheitert")
+                log.exception("Beobachtung (am Leitstand vorbei, Last) gescheitert")
             await asyncio.sleep(self.verwalter.einstellungen.beobachtung.takt_s)
+
+    def _beobachten(self, lastmesser: Lastmesser) -> tuple[Fremdzugriffe, KnotenLast]:
+        aufnahme = self.beobachter.aufnehmen()
+        return self.beobachter.fremde(aufnahme), lastmesser.messen(aufnahme)
 
     async def _aenderung_abwarten(self, empfang: asyncio.Task) -> None:
         warten = asyncio.create_task(self.verwalter.aenderung.wait())
@@ -305,6 +318,9 @@ class Leitstellenkanal:
             log.warning("Ungültiger Befehl: %s", f.errors()[:1])
             return
         log.info("Befehl der Leitstelle: %s %s", b.befehl.value, b.ziel)
-        ergebnis = await self.verwalter.befehl(b, von_leitstelle=True)
+        if b.befehl == Befehlsart.LAEUFER_PROZESS_BEENDEN:
+            ergebnis = await self.laeuferaufsicht.beenden(b.ziel)
+        else:
+            ergebnis = await self.verwalter.befehl(b, von_leitstelle=True)
         with contextlib.suppress(websockets.exceptions.ConnectionClosed):
             await senden(_umschlag("knoten.befehl_ergebnis", ergebnis, bezug=u.id))

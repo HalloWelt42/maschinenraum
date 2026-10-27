@@ -42,7 +42,7 @@ export type Verbindung = 'aus' | 'ohne_schluessel' | 'verbindet' | 'verbunden' |
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
  * via the `definition` "Befehlsart".
  */
-export type Befehlsart = 'dienst_starten' | 'dienst_anhalten';
+export type Befehlsart = 'dienst_starten' | 'dienst_anhalten' | 'laeufer_prozess_beenden';
 
 export interface Maschinenraum {
   Stand?: Stand;
@@ -85,6 +85,7 @@ export interface Einstellungen {
   neustart: Neustartregeln;
   nachbar: Nachbar;
   schlaf: Schlaf;
+  beobachtung: Beobachtung;
 }
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
@@ -164,7 +165,7 @@ export interface Neustartregeln {
  */
 export interface Nachbar {
   /**
-   * Modell-Läufer auf diesem Rechner, nur zur Anzeige; leer: keiner
+   * Modell-Läufer auf diesem Rechner: angezeigt, für die Leitstelle unter /laeufer durchgereicht und auf fremde Zugriffe beobachtet; leer: keiner
    */
   modell_laeufer: string | null;
 }
@@ -183,6 +184,43 @@ export interface Schlaf {
    * solange die Leitstelle über diesen Rechner rechnen lässt, schläft er nicht nach Leerlauf ein; Deckel, Menü und Ein-Taste wirken weiter
    */
   leerlauf_aufschieben: boolean;
+}
+/**
+ * Was die Leitstelle über diesen Rechner zum Entscheiden braucht, im eigenen Takt: Zugriffe am Leitstand vorbei
+ * (Verbindungen zum Modell-Läufer, die nicht über die Durchleitung kommen, und Programme mit viel Speicher außerhalb von
+ * Diensten und Läufer) und die Last (je Prozess des Läufers und die Fremdlast des Rechners). Dazu, woran ein Arbeiter des
+ * Läufers zu erkennen ist und wie er auf Befehl der Leitstelle beendet wird.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Beobachtung".
+ */
+export interface Beobachtung {
+  /**
+   * der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie belastet Läufer und Rechner sind
+   */
+  aktiv: boolean;
+  /**
+   * Abstand der Beobachtungen; eigener Takt, weil eine Messung dauert
+   */
+  takt_s: number;
+  /**
+   * ab so viel Speicher gilt ein Programm als möglicher Modellträger
+   */
+  schwelle_gb: number;
+  /**
+   * Teile der Befehlszeile, die nie als Speicherverbraucher gemeldet werden (Browser, virtuelle Maschinen)
+   */
+  ausnahmen: string[];
+  /**
+   * Endungen von Modelldateien: ein Prozess des Läufers, der eine davon offen hat, ist ein Arbeiter (eine geladene Instanz)
+   *
+   * @minItems 1
+   */
+  modelldateien: [string, ...string[]];
+  /**
+   * so lange darf ein Arbeiter des Läufers nach der Bitte um Beenden aufräumen, dann wird er hart beendet
+   */
+  anhaltezeit_s: number;
 }
 /**
  * `knoten.messwerte`: im Takt des Agenten.
