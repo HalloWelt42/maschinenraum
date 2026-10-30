@@ -213,7 +213,9 @@ Ist eine Leitstelle eingetragen, ist sie der einzige Weg zu den Diensten: Die Di
 Rechner (`127.0.0.1`), Anwendungen rufen die Leitstelle (`/v1/dienste/<kennung>/<pfad>`), und die Leitstelle reicht
 über die **Durchleitung** des Maschinenraums durch (Port 8541, Abschnitt `durchleitung` der Einstellungen). Die
 Durchleitung nimmt nur Anfragen mit dem Schlüssel dieses Maschinenraums an und nur an Dienste, die laufen; Anfrage
-und Antwort gehen unverändert hindurch, auch Audio und Bilder. Die Leitstelle startet einen Dienst dabei bei Bedarf,
+und Antwort gehen unverändert hindurch, auch Audio und Bilder. Bricht die Leitstelle einen Auftrag ab (die Anwendung
+ist gegangen oder er wurde gestoppt), schließt die Durchleitung auch ihre Verbindung zum Dienst, selbst wenn er noch
+rechnet und noch nichts geantwortet hat; ein Dienst, der darauf achtet (etwa das Bildwerk), hört dann sofort auf. Die Leitstelle startet einen Dienst dabei bei Bedarf,
 plant seinen Speicher ein und hält ihn bei Speichernot wieder an, wenn seine Dienstdatei das erlaubt. Den
 Modell-Läufer spricht die Leitstelle direkt an; durch die Durchleitung gehen nur die Dienste des Maschinenraums.
 
