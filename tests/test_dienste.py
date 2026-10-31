@@ -160,6 +160,30 @@ async def test_selbstauskunft_aus_der_dienstdatei(tmp_path: Path):
         assert "ISO 639-1" in str(f)
 
 
+async def test_name_ist_das_modell_die_aufgabe_kommt_aus_der_faehigkeit(tmp_path: Path):
+    """HELF-84: `name` trägt den Modellnamen, die Aufgabe leitet sich aus der Fähigkeit ab und geht fertig an Oberfläche
+    und Leitstelle; ein Dienst ohne Modell heißt nach seiner Aufgabe, dann steht sie nicht doppelt da."""
+    from maschinenraum.konfig import DienstVorlage
+    from maschinenraum.protokoll import aufgabe
+    from maschinenraum.prozesse import bericht
+
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, port)
+    (tmp_path / "dienste" / "probe.toml").write_text(
+        (tmp_path / "dienste" / "probe.toml").read_text().replace('name = "Probe"', 'name = "Qwen3-TTS 1.7B Base"'))
+    v = verwalter(o)
+    await v.runde()
+    b = bericht(v.dienste["probe"], v.speicherschutz)
+    assert (b.name, b.aufgabe) == ("Qwen3-TTS 1.7B Base", "Sprachausgabe")
+    assert aufgabe("Whisper Large V3", {Faehigkeit.HOEREN}) == "Spracherkennung"
+    assert aufgabe("pyannote speaker-diarization 3.1", {Faehigkeit.SPRECHER_TRENNEN}) == "Spracherkennung"
+    assert aufgabe("Tonbearbeitung", {Faehigkeit.TON}) == ""
+    assert aufgabe("X", {Faehigkeit.HOEREN, Faehigkeit.SPRECHER_TRENNEN, Faehigkeit.STIMME}) == "Spracherkennung, Sprachausgabe"
+    vorlage = DienstVorlage.model_validate({"kennung": "bildwerk-moss-image", "name": "MOSS-Image", "ordner": str(tmp_path),
+                                            "befehl": ["x"], "faehigkeiten": ["bild_erzeugen"]})
+    assert vorlage.aufgabe == "Bilderzeugung"
+
+
 def ordner_mit_instanzen(tmp: Path, instanzen: int = 2) -> tuple[Ordner, int]:
     """Dienst probe mit mehreren Instanzen: Instanz n auf port + 100 (n-1), den Port nimmt der Befehl aus $MASCHINENRAUM_PORT."""
     while True:

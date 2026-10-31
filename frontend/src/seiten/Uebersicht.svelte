@@ -5,6 +5,7 @@
   import { VERBINDUNG, ZUSTAND, dienstfarbe } from '../lib/wort';
   import { weg } from '../lib/weg.svelte';
   import BetriebKarte from '../teile/BetriebKarte.svelte';
+  import Modellname from '../teile/Modellname.svelte';
   import Protokoll from '../teile/Protokoll.svelte';
   import Schalter from '../teile/Schalter.svelte';
   import SpeicherKarte from '../teile/SpeicherKarte.svelte';
@@ -42,7 +43,7 @@
             {@const z = ZUSTAND[d.zustand]}
             <div class="dienstzeile" style="--f:{dienstfarbe(d.faehigkeiten)}">
               <span class="farbe"></span>
-              <div class="name"><a href={weg.pfad('dienste')} onclick={(e) => weg.klick(e, 'dienste')}>{d.name}</a>
+              <div class="name"><a href={weg.pfad('dienste')} onclick={(e) => weg.klick(e, 'dienste')}><Modellname name={d.name} aufgabe={d.aufgabe} /></a>
                 <span class="zustand {z.klasse}"><i class="fa-solid {z.symbol}"></i>{z.wort}</span>
                 {#if d.aktiv}<span class="arbeitet"><i class="fa-solid fa-gear fa-spin"></i> arbeitet</span>{/if}</div>
               <div class="werte" title="Jetzt belegt / Bedarf, mit dem die Leitstelle plant">

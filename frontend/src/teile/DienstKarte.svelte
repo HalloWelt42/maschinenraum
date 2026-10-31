@@ -6,6 +6,7 @@
   import { meldungen } from '../lib/meldung.svelte';
   import type { BefehlErgebnis, DienstAnsicht, Ergebnis } from '../lib/typen.gen';
   import { FAEHIGKEIT, ZUSTAND } from '../lib/wort';
+  import Modellname from './Modellname.svelte';
   import Protokoll from './Protokoll.svelte';
 
   let { dienst: d }: { dienst: DienstAnsicht } = $props();
@@ -57,7 +58,7 @@
 <article class="karte dienst" class:an={laeuft}>
   <header>
     <span class="zustand {z.klasse}"><i class="fa-solid {arbeitet ? 'fa-circle-notch fa-spin' : z.symbol}"></i>{arbeitet === 'starten' ? 'Startet' : arbeitet === 'anhalten' ? 'Hält an' : arbeitet === 'neustarten' ? 'Startet neu' : z.wort}</span>
-    <h2>{d.name}</h2>
+    <h2><Modellname name={d.name} aufgabe={d.aufgabe} /></h2>
     <div class="speicherzahl" title="Bedarf: der Wert, mit dem 80 Prozent der jüngsten Arbeitsphasen auskamen, mindestens die Anmeldung der Dienstdatei ({gb(d.schaetzung_gb)}). Mit diesem Wert plant die Leitstelle.">
       <b class="zahl">{gb(d.bedarf_gb)}</b><span>Bedarf{d.spitze_gb ? '' : ', geschätzt'}</span>
       {#if d.gb_jetzt != null}<span class="jetzt" title="Gerade gemessen; Dienste laden ihre Modelle oft erst bei Bedarf">jetzt <b class="zahl">{gb(d.gb_jetzt)}</b></span>{/if}</div>

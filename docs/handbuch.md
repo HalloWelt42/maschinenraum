@@ -35,7 +35,7 @@ Arbeiter des Läufers, der ohne Auftrag rechnet, nie den Hauptprozess.
 Ohne Maschinenraum hört und spricht im Verbund niemand: die Leitstelle kann die Sprachdienste am Mac weder starten
 noch erreichen.
 
-Er läuft als launchd-Dienst `maschinenraum` mit Oberfläche im Browser (nur dieser Rechner, Vorgabe Port 8540) und
+Er läuft als launchd-Dienst `maschinenraum` mit Oberfläche im Browser (nur dieser Rechner, Vorgabe Port {{port:ziel/lokal}}) und
 Durchleitung für die Leitstelle (im Netz, Vorgabe Port 8541); dazu ein Symbol in der Menüleiste, das die KI-Dienste
 mit Zustand und Speicher zeigt und die Oberflächen von Maschinenraum, [[Stellwerk]] und [[Leitstelle]] öffnet (es
 schaltet nichts). In Kopfzeile und Tab-Titel heißt er "Maschinenraum · KI-Dienste". Die Ports stehen als Vorgabe in
@@ -69,13 +69,13 @@ cd {{ordner}} && ./einrichten.sh
 in der Menüleiste (`~/Applications/Maschinenraum.app`, launchd `maschinenraum.menueleiste`). Eine erneute Installation
 aktualisiert und wartet, bis keine Anfrage der Leitstelle mehr durchgereicht wird.
 
-Probe: `curl -s http://127.0.0.1:8540/api/version` meldet `{"version":"{{fassung}}"}`, und
+Probe: `curl -s http://127.0.0.1:{{port:ziel/lokal}}/api/version` meldet `{"version":"{{fassung}}"}`, und
 `launchctl print gui/$(id -u)/maschinenraum | grep state` zeigt `running`.
 
 ### 2. Mit der Leitstelle verbinden
 
 Aus der Sicherung schon erledigt. Frisch in der [[Leitstelle]] unter Knoten beim Mac "Maschinenraum verbinden"; dann in
-der Oberfläche des Maschinenraums (http://127.0.0.1:8540/) unter Leitstelle Adresse und Schlüssel eintragen. Der
+der Oberfläche des Maschinenraums (http://127.0.0.1:{{port:ziel/lokal}}/) unter Leitstelle Adresse und Schlüssel eintragen. Der
 Schlüssel landet in `~/Maschinenraum/schluessel` (Modus 0600).
 
 Probe: in der Leitstelle unter Knoten meldet der Mac seinen gemessenen Speicher, und in der Oberfläche des
@@ -84,7 +84,8 @@ Maschinenraums steht die Leitstelle auf verbunden.
 ### 3. Dienste eintragen
 
 Aus der Sicherung liegen die Dienstdateien schon in `~/Maschinenraum/dienste/`. Frisch kommen sie mit der Installation
-der Dienste (etwa `./installieren.sh` im [[Klangwerk]]); jede Datei nennt Befehl, Port, Prüfadresse und Fähigkeiten.
+der Dienste (etwa `./installieren.sh` im [[Klangwerk]]); jede Datei nennt Befehl, Port, Prüfadresse und Fähigkeiten. Als Name trägt sie den echten Modellnamen;
+die Aufgabe steht klein dahinter und kommt aus den Fähigkeiten, etwa "Whisper Large V3 · Spracherkennung".
 Eine fehlerhafte Datei hält ihren Dienst nicht an: er läuft mit der letzten gültigen Fassung weiter, der Fehler steht
 unter Ladefehler.
 

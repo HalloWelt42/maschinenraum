@@ -284,6 +284,8 @@ p { margin: 0; }
 .leise { color: var(--mr-text-2); }
 .schwach { color: var(--mr-text-3); }
 .klein { font-size: var(--mr-gr-klein); }
+/* Aufgabe klein hinter dem Modellnamen (Teil Modellname) */
+.aufgabe { font-size: var(--mr-gr-klein); font-weight: 400; color: var(--mr-text-2); }
 .akzent { color: var(--mr-akzent-schrift); }
 /* Zahlen in der technischen Zahlenschrift */
 .zahl, .zaehler, .zeit { font-family: var(--mr-schrift-zahl); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }

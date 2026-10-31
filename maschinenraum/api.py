@@ -37,7 +37,8 @@ OBERFLAECHE = Path(__file__).resolve().parent / "oberflaeche"
 
 class DienstAnsicht(BaseModel):
     kennung: str
-    name: str
+    name: str                       # Modellname; ohne Modell die Aufgabe
+    aufgabe: str                    # klein hinter dem Namen; leer, wenn der Name sie schon nennt
     beschreibung: str
     faehigkeiten: list[Faehigkeit]
     port: int | None
@@ -162,7 +163,7 @@ class Laufzeit:
         ergebnis = []
         for d in self.verwalter.dienste.values():
             b, k, v = bericht(d, self.verwalter.speicherschutz), d.bericht(), d.vorlage
-            ergebnis.append(DienstAnsicht(kennung=b.kennung, name=b.name, beschreibung=v.beschreibung, faehigkeiten=sorted(b.faehigkeiten, key=lambda f: f.value),
+            ergebnis.append(DienstAnsicht(kennung=b.kennung, name=b.name, aufgabe=v.aufgabe, beschreibung=v.beschreibung, faehigkeiten=sorted(b.faehigkeiten, key=lambda f: f.value),
                                           port=b.port, oberflaeche=v.oberflaeche, zustand=b.zustand, fremd=b.fremd, gb_jetzt=b.gb_jetzt,
                                           bedarf_gb=b.bedarf_gb, spitze_gb=k.spitze_gb, schaetzung_gb=v.speicher_gb, grenze_gb=b.grenze_gb,
                                           sperre=b.sperre, sperre_seit=d.stand.sperre.seit if d.stand.sperre else None, aktiv=b.aktiv,

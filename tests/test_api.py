@@ -33,6 +33,7 @@ def test_stand_schalten_und_protokoll(tmp_path: Path):
             time.sleep(0.1)
         d = s["dienste"][0]
         assert d["kennung"] == "probe" and d["zustand"] == "aus" and d["soll"] is None and d["faehigkeiten"] == ["stimme"]
+        assert d["name"] == "Probe" and d["aufgabe"] == "Sprachausgabe"
         assert d["gb_jetzt"] is None and d["bedarf_gb"] == 0.5 and d["anhalten_erlaubt"] and not d["aktiv"]
         assert s["leitstelle"]["zustand"] == "aus" and s["version"]
 

@@ -17,6 +17,7 @@ struct Messwerte: Decodable {
 struct Dienst: Decodable, Identifiable {
     let kennung: String
     let name: String
+    let aufgabe: String?        // klein hinter dem Modellnamen; leer, wenn der Name sie schon nennt
     let zustand: String
     let gb_jetzt: Double?
     let bedarf_gb: Double
@@ -136,7 +137,7 @@ struct Ansicht: View {
                 ForEach(dienste) { d in
                     HStack(spacing: 8) {
                         Circle().fill(d.zustand == "gestoert" ? Color.red : d.laeuft ? Color.green : Color.gray.opacity(0.5)).frame(width: 9, height: 9)
-                        Text(d.name).lineLimit(1)
+                        (Text(d.name) + Text((d.aufgabe ?? "").isEmpty ? "" : " · \(d.aufgabe ?? "")").font(.caption).foregroundColor(.secondary)).lineLimit(1)
                         Spacer()
                         if d.aktiv { Image(systemName: "gearshape.fill").foregroundStyle(.orange).help("arbeitet gerade") }
                         if let jetzt = d.gb_jetzt { Text(gb(jetzt)).monospacedDigit().foregroundStyle(.secondary).help("Bedarf \(gb(d.bedarf_gb))") }

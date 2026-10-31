@@ -28,7 +28,7 @@ from dienstkern.verwalter import Neustartregeln
 from dienstkern.vorlage import Ladefehler, Vorlage, dateien_lesen
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .protokoll import Eignung, Faehigkeit
+from .protokoll import Eignung, Faehigkeit, aufgabe
 
 STANDARD_ORDNER = "~/Maschinenraum"
 MODELLE_VARIABLE = "MASCHINENRAUM_MODELLE"
@@ -208,6 +208,11 @@ class DienstVorlage(Vorlage):
             if "." in self.kennung:
                 raise ValueError("instanzen > 1 nur für Dienste ohne Punkt in der Kennung (Instanzen heißen <kennung>.<n>)")
         return self
+
+    @property
+    def aufgabe(self) -> str:
+        """Wofür der Dienst da ist, aus seinen Fähigkeiten; `name` trägt den Modellnamen (siehe protokoll.aufgabe)."""
+        return aufgabe(self.name, self.faehigkeiten)
 
     def speicherarten(self) -> frozenset[str]:
         """Fähigkeiten als Arten für die Obergrenze des Speichers (`[speicherschutz] obergrenze_je_art_gb`)."""

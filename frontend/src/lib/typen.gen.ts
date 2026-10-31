@@ -185,6 +185,12 @@ export interface Speicherschutz {
    */
   zuschlag_gb: number;
   /**
+   * Obergrenze je Fähigkeit: höher geht kein Dienst mit dieser Fähigkeit, auch nicht mit eigener Grenze oder nach der Formel; hat er mehrere, gilt die kleinste
+   */
+  obergrenze_je_art_gb: {
+    [k: string]: number;
+  };
+  /**
    * darunter (freier Anteil, wie das System ihn nennt) gilt der Rechner als knapp; 0 schaltet diese Prüfung ab
    */
   frei_mindestens_prozent: number;
@@ -329,6 +335,7 @@ export interface Messwerte {
 export interface DienstAnsicht {
   kennung: string;
   name: string;
+  aufgabe: string;
   beschreibung: string;
   faehigkeiten: Faehigkeit[];
   port: number | null;

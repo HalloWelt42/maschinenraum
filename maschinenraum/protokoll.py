@@ -29,6 +29,33 @@ class Faehigkeit(str, Enum):
     TON = "ton"                       # Tonarbeit ohne Modell (wandeln, messen, mischen)
 
 
+# Aufgabe je Fähigkeit: steht klein hinter dem Modellnamen ("Whisper Large V3 · Spracherkennung"). Einzige Stelle dafür;
+# Oberfläche und Leitstelle bekommen das fertige Wort (ProzessBericht.aufgabe).
+AUFGABE: dict[Faehigkeit, str] = {
+    Faehigkeit.TEXT: "Textarbeit",
+    Faehigkeit.EINBETTUNG: "Einbettung",
+    Faehigkeit.UEBERSETZEN: "Übersetzung",
+    Faehigkeit.HOEREN: "Spracherkennung",
+    Faehigkeit.BILD_BESCHREIBEN: "Bildbeschreibung",
+    Faehigkeit.BILD_ERZEUGEN: "Bilderzeugung",
+    Faehigkeit.STIMME: "Sprachausgabe",
+    Faehigkeit.STIMME_KLONEN: "Sprachausgabe",
+    Faehigkeit.SPRECHER_ERKENNEN: "Spracherkennung",
+    Faehigkeit.SPRECHER_TRENNEN: "Spracherkennung",
+    Faehigkeit.MUSIK: "Musikerzeugung",
+    Faehigkeit.WERKZEUG: "Werkzeuge",
+    Faehigkeit.TON: "Tonbearbeitung",
+}
+
+
+def aufgabe(name: str, faehigkeiten: set[Faehigkeit]) -> str:
+    """Die Aufgabe eines Dienstes aus seinen Fähigkeiten (gleiche Wörter einmal, in der Reihenfolge der Fähigkeiten).
+    Leer, wenn der Name sie schon nennt: ein Dienst ohne Modell heißt nach seiner Aufgabe ("Tonbearbeitung")."""
+    woerter = list(dict.fromkeys(AUFGABE[f] for f in Faehigkeit if f in faehigkeiten))
+    text = ", ".join(woerter)
+    return "" if text == name.strip() else text
+
+
 class Eignung(str, Enum):
     """Wofür ein Modell oder Dienst besonders taugt, über seine Fähigkeiten hinaus (Selbstauskunft, PROTOKOLL 4.8 der Leitstelle)."""
 
@@ -87,7 +114,8 @@ class ProzessBericht(BaseModel):
     """Ein Dienst, den der Agent verwaltet (eine Datei in seinem Ordner `dienste/`)."""
 
     kennung: str
-    name: str
+    name: str                           # Modellname (Whisper Large V3); ohne Modell die Aufgabe (Tonbearbeitung)
+    aufgabe: str = ""                   # wofür er da ist, aus den Fähigkeiten (Spracherkennung); leer, wenn der Name es sagt
     faehigkeiten: set[Faehigkeit]
     port: int | None = None
     zustand: Prozesszustand

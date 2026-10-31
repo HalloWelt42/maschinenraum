@@ -3,6 +3,7 @@
   import { gb } from '../lib/format';
   import type { Stand } from '../lib/typen.gen';
   import { ZUSTAND, dienstfarbe } from '../lib/wort';
+  import Modellname from '../teile/Modellname.svelte';
   import SpeicherKarte from '../teile/SpeicherKarte.svelte';
 
   let { stand: s }: { stand: Stand } = $props();
@@ -23,7 +24,7 @@
         <thead><tr><th>Wer</th><th>Herkunft</th><th>Zustand</th><th class="r">Jetzt</th><th class="r">Bedarf</th><th>Leitstelle</th></tr></thead>
         <tbody>
           {#each s.dienste as d (d.kennung)}
-            <tr><td><span class="farbe" style="background:{dienstfarbe(d.faehigkeiten)}"></span>{d.name}</td><td class="leise">Maschinenraum</td>
+            <tr><td><span class="farbe" style="background:{dienstfarbe(d.faehigkeiten)}"></span><Modellname name={d.name} aufgabe={d.aufgabe} /></td><td class="leise">Maschinenraum</td>
               <td><span class="zustand {ZUSTAND[d.zustand].klasse}">{ZUSTAND[d.zustand].wort}</span>{#if d.aktiv}<span class="arbeitet"> arbeitet</span>{/if}</td>
               <td class="r zahl">{d.gb_jetzt != null ? gb(d.gb_jetzt) : '-'}</td><td class="r zahl">{gb(d.bedarf_gb)}</td>
               <td class="leise">{d.anhalten_erlaubt ? 'darf anhalten' : 'nur von Hand'}</td></tr>

@@ -95,7 +95,7 @@ werden mit einer lesbaren Meldung übergangen.
 
 | Feld | Vorgabe | Bedeutung |
 |---|---|---|
-| `name` | Pflicht | Anzeigename |
+| `name` | Pflicht | der echte Modellname, etwa `Whisper Large V3`; ohne Modell die Aufgabe (`Tonbearbeitung`). Die Aufgabe (Spracherkennung, Sprachausgabe, Bilderzeugung ...) leitet der Maschinenraum aus den Fähigkeiten ab und zeigt sie klein dahinter: "Whisper Large V3 · Spracherkennung"; sie gehört nicht in den Namen |
 | `ordner` | Pflicht | Arbeitsordner; `~` und `$VAR` werden aufgelöst |
 | `befehl` | Pflicht | Programm und Argumente als Liste; ein relativer Programmpfad gilt ab `ordner`; `$NAME` kommt aus der Umgebung des Dienstes (auch aus `umgebung_datei`) |
 | `vorher` | leer | Befehl, der vor jedem Start einmal läuft |

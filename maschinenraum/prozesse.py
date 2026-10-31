@@ -89,7 +89,7 @@ def bericht(d: Dienst, schutz: Speicherschutz) -> ProzessBericht:
     b, v = d.bericht(), d.vorlage
     assert isinstance(v, DienstVorlage)
     grund, stufe = grund_und_stufe(b.kennung)
-    return ProzessBericht(kennung=b.kennung, name=b.name, faehigkeiten=set(v.faehigkeiten), port=b.port, zustand=Prozesszustand(b.zustand.value),
+    return ProzessBericht(kennung=b.kennung, name=b.name, aufgabe=v.aufgabe, faehigkeiten=set(v.faehigkeiten), port=b.port, zustand=Prozesszustand(b.zustand.value),
                           fremd=b.fremd, gb_jetzt=b.gb_jetzt, bedarf_gb=b.bedarf_gb, aktiv=b.aktiv, anhalten_erlaubt=v.leitstelle_anhalten,
                           plaetze=v.plaetze, selbstauskunft=Selbstauskunft(zweck=v.beschreibung, eignung=list(v.eignung), sprachen=list(v.sprachen)),
                           instanz_von=grund if stufe > 1 else None, instanzen=v.instanzen,
