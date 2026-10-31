@@ -75,6 +75,11 @@ class Speicherschutz(Kernschutz):
                                     "der Dienstdatei gehen vor; wirkt beim nächsten Start des Dienstes")
     aufraeumen_anteil: float = Field(default=0.8, gt=0, le=1, description="torch räumt seine Puffer ab diesem Anteil der Grenze auf "
                                      "(untere Marke); ohne Angabe erst weit über der Grenze")
+    # Nutzer 31.10.2026: ein Sprachmodell (Sprachausgabe, Spracherkennung) belegt nie mehr als 20 GB; Schlüssel sind Fähigkeiten
+    obergrenze_je_art_gb: dict[str, float] = Field(
+        default_factory=lambda: {"hoeren": 20.0, "stimme": 20.0, "stimme_klonen": 20.0},
+        description="Obergrenze je Fähigkeit: höher geht kein Dienst mit dieser Fähigkeit, auch nicht mit eigener Grenze oder "
+                    "nach der Formel; hat er mehrere, gilt die kleinste")
 
 
 class Schlaf(BaseModel):
@@ -159,6 +164,8 @@ def _toml_wert(w: object) -> str:
         return repr(w)
     if isinstance(w, list):
         return "[" + ", ".join(_toml_wert(x) for x in w) + "]"
+    if isinstance(w, dict):
+        return "{ " + ", ".join(f"{k} = {_toml_wert(x)}" for k, x in w.items()) + " }"
     return '"' + str(w).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
@@ -201,6 +208,10 @@ class DienstVorlage(Vorlage):
             if "." in self.kennung:
                 raise ValueError("instanzen > 1 nur für Dienste ohne Punkt in der Kennung (Instanzen heißen <kennung>.<n>)")
         return self
+
+    def speicherarten(self) -> frozenset[str]:
+        """Fähigkeiten als Arten für die Obergrenze des Speichers (`[speicherschutz] obergrenze_je_art_gb`)."""
+        return frozenset(f.value for f in self.faehigkeiten)
 
     @field_validator("sprachen")
     @classmethod

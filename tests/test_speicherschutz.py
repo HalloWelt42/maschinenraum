@@ -124,3 +124,28 @@ def test_wachsender_dienst_wird_mitten_im_auftrag_beendet_und_gesperrt(tmp_path:
         assert ansicht["spitze_gb"] is None
         assert oben.post("/api/dienste/gibtsnicht/spitzen_verwerfen", headers=OBEN).status_code == 404
     assert json.loads((tmp_path / "zustand.json").read_text())["dienste"]["hoerer"]["sperre"] is None
+
+
+def test_sprachmodelle_hoechstens_20_gb(tmp_path: Path):
+    """Nutzer 31.10.2026: ein Sprachmodell (Fähigkeit hoeren, stimme, stimme_klonen) belegt nie mehr als 20 GB, auch wenn die
+    Formel aus speicher_gb oder eine eigene Grenze mehr ergäbe; als Einstellung unter [speicherschutz], dort änderbar."""
+    import tomllib
+
+    from dienstkern.speicherwache import grenze_gb
+    from maschinenraum.konfig import DienstVorlage, Einstellungen, Speicherschutz, toml_schreiben
+
+    def vorlage(faehigkeit: str, speicher_gb: float, grenze: float | None = None) -> DienstVorlage:
+        return DienstVorlage(kennung="d", name="d", ordner=tmp_path, befehl=["x"], faehigkeiten=[faehigkeit],
+                             speicher_gb=speicher_gb, speicher_grenze_gb=grenze)
+
+    s = Speicherschutz()
+    assert grenze_gb(vorlage("hoeren", 16), s) == 20 and grenze_gb(vorlage("stimme", 4, grenze=32), s) == 20
+    assert grenze_gb(vorlage("hoeren", 4), s) == 10                       # darunter gilt die Formel
+    assert grenze_gb(vorlage("bild_erzeugen", 32), s) == 52                # Bilddienste ohne Deckel
+    geaendert = s.model_copy(update={"obergrenze_je_art_gb": {"hoeren": 12.0}})
+    assert grenze_gb(vorlage("hoeren", 16), geaendert) == 12
+    text = toml_schreiben(Einstellungen(speicherschutz=geaendert))
+    assert tomllib.loads(text)["speicherschutz"]["obergrenze_je_art_gb"] == {"hoeren": 12.0}
+    assert Einstellungen.model_validate(tomllib.loads(text)).speicherschutz.obergrenze_je_art_gb == {"hoeren": 12.0}
+    # eine Einstellungsdatei mit [speicherschutz], aber ohne den Deckel: die Vorgabe 20 GB bleibt
+    assert Einstellungen.model_validate({"speicherschutz": {"faktor": 2}}).speicherschutz.obergrenze_je_art_gb["hoeren"] == 20
