@@ -23,6 +23,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from dienstkern.speicherwache import Speicherschutz as Kernschutz
 from dienstkern.verwalter import Neustartregeln
 from dienstkern.vorlage import Ladefehler, Vorlage, dateien_lesen
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -62,6 +63,18 @@ class Leitstelle(BaseModel):
 class Messung(BaseModel):
     takt_s: float = Field(default=5.0, ge=1, le=300, description="Abstand der Messungen und der Dienstprüfung")
     macmon: bool = Field(default=True, description="Zusatzmessungen (Grafik, Temperatur, Leistung) über macmon, wenn vorhanden")
+
+
+class Speicherschutz(Kernschutz):
+    """Harte Grenze je Dienst und Notaus bei knappem Rechner (Speicherwache des Dienstkerns, HELF-85), dazu die Grenze im
+    Prozess selbst: ein Dienst, der sie kennt, scheitert mit einem Fehler statt weiterzuwachsen."""
+
+    grenze_im_prozess: bool = Field(default=True, description="jeder Dienst bekommt seine Grenze beim Start auch selbst: "
+                                    "MASCHINENRAUM_SPEICHER_GRENZE_GB, für torch auf der Grafik PYTORCH_MPS_HIGH_WATERMARK_RATIO "
+                                    "(Grenze je empfohlener Arbeitsmenge der Grafik) und PYTORCH_MPS_LOW_WATERMARK_RATIO; Einträge "
+                                    "der Dienstdatei gehen vor; wirkt beim nächsten Start des Dienstes")
+    aufraeumen_anteil: float = Field(default=0.8, gt=0, le=1, description="torch räumt seine Puffer ab diesem Anteil der Grenze auf "
+                                     "(untere Marke); ohne Angabe erst weit über der Grenze")
 
 
 class Schlaf(BaseModel):
@@ -133,6 +146,7 @@ class Einstellungen(BaseModel):
     durchleitung: Durchleitung = Field(default_factory=Durchleitung)
     messung: Messung = Field(default_factory=Messung)
     neustart: Neustartregeln = Field(default_factory=Neustartregeln)
+    speicherschutz: Speicherschutz = Field(default_factory=Speicherschutz)
     nachbar: Nachbar = Field(default_factory=Nachbar)
     schlaf: Schlaf = Field(default_factory=Schlaf)
     beobachtung: Beobachtung = Field(default_factory=Beobachtung)

@@ -83,6 +83,7 @@ export interface Einstellungen {
   durchleitung: Durchleitung;
   messung: Messung;
   neustart: Neustartregeln;
+  speicherschutz: Speicherschutz;
   nachbar: Nachbar;
   schlaf: Schlaf;
   beobachtung: Beobachtung;
@@ -158,6 +159,75 @@ export interface Neustartregeln {
    * mehr Abstürze im Zeitraum: der Dienst bleibt aus
    */
   im_fenster: number;
+}
+/**
+ * Harte Grenze je Dienst und Notaus bei knappem Rechner (Speicherwache des Dienstkerns, HELF-85), dazu die Grenze im
+ * Prozess selbst: ein Dienst, der sie kennt, scheitert mit einem Fehler statt weiterzuwachsen.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Speicherschutz".
+ */
+export interface Speicherschutz {
+  /**
+   * Dienste über ihrer Höchstgrenze oder bei knappem Rechner sofort beenden und sperren
+   */
+  aktiv: boolean;
+  /**
+   * so oft wird gemessen, solange ein Dienst läuft
+   */
+  takt_s: number;
+  /**
+   * Höchstgrenze ohne eigene Angabe: speicher_gb mal diesen Faktor ...
+   */
+  faktor: number;
+  /**
+   * ... plus diesen Zuschlag
+   */
+  zuschlag_gb: number;
+  /**
+   * darunter (freier Anteil, wie das System ihn nennt) gilt der Rechner als knapp; 0 schaltet diese Prüfung ab
+   */
+  frei_mindestens_prozent: number;
+  /**
+   * kritischer Speicherdruck des Systems gilt ebenfalls als knapp
+   */
+  druck_kritisch: boolean;
+  /**
+   * ist der Rechner knapp, wird nur ein Dienst beendet, der mindestens so weit über seinem angemeldeten Speicher liegt
+   */
+  ueberschuss_mindestens_gb: number;
+  /**
+   * mehr Auslagerung gilt als knapp; 0 schaltet ab
+   */
+  swap_hoechstens_gb: number;
+  /**
+   * so viel Auslagerung wird geduldet ...
+   */
+  swap_geduldet_gb: number;
+  /**
+   * ... höchstens so lange am Stück (bei Speicherdruck)
+   */
+  swap_geduldet_s: number;
+  /**
+   * dauerhafte Auslagerung zählt nur, solange das System dabei Speicherdruck meldet (alte, ruhende Auslagerung baut macOS nur langsam ab)
+   */
+  swap_dauer_nur_bei_druck: boolean;
+  /**
+   * wächst die Auslagerung schneller, gilt der Rechner als knapp; 0 schaltet ab
+   */
+  swap_zuwachs_gb_je_min: number;
+  /**
+   * über diesen Zeitraum wird der Zuwachs gemessen
+   */
+  swap_zuwachs_fenster_s: number;
+  /**
+   * jeder Dienst bekommt seine Grenze beim Start auch selbst: MASCHINENRAUM_SPEICHER_GRENZE_GB, für torch auf der Grafik PYTORCH_MPS_HIGH_WATERMARK_RATIO (Grenze je empfohlener Arbeitsmenge der Grafik) und PYTORCH_MPS_LOW_WATERMARK_RATIO; Einträge der Dienstdatei gehen vor; wirkt beim nächsten Start des Dienstes
+   */
+  grenze_im_prozess: boolean;
+  /**
+   * torch räumt seine Puffer ab diesem Anteil der Grenze auf (untere Marke); ohne Angabe erst weit über der Grenze
+   */
+  aufraeumen_anteil: number;
 }
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
@@ -269,6 +339,9 @@ export interface DienstAnsicht {
   bedarf_gb: number;
   spitze_gb: number | null;
   schaetzung_gb: number;
+  grenze_gb: number | null;
+  sperre: string | null;
+  sperre_seit: string | null;
   aktiv: boolean;
   cpu_prozent: number | null;
   anhalten_erlaubt: boolean;

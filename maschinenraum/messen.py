@@ -9,6 +9,9 @@ Systemanzeigen.
 
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
+import functools
 import json
 import os
 import re
@@ -25,6 +28,28 @@ TEMPERATUR_PLAUSIBEL = (15.0, 120.0)            # °C; außerhalb ist es ein Mes
 
 
 # ── Rechner ──────────────────────────────────────────────────────────────
+@functools.cache
+def grafik_arbeitsmenge_gb() -> float | None:
+    """Empfohlene Arbeitsmenge der Grafik (Metal recommendedMaxWorkingSetSize) in GiB; daran misst torch auf mps seine
+    Marken (PYTORCH_MPS_HIGH_WATERMARK_RATIO). None ohne Metal. Einmal je Lauf, ohne Zusatzpakete über die
+    Laufzeit von Objective-C."""
+    if not MAC:
+        return None
+    try:
+        metal = ctypes.CDLL("/System/Library/Frameworks/Metal.framework/Metal")
+        objc = ctypes.CDLL(ctypes.util.find_library("objc"))
+        metal.MTLCreateSystemDefaultDevice.restype = ctypes.c_void_p
+        objc.sel_registerName.restype, objc.sel_registerName.argtypes = ctypes.c_void_p, [ctypes.c_char_p]
+        senden = ctypes.CFUNCTYPE(ctypes.c_uint64, ctypes.c_void_p, ctypes.c_void_p)(("objc_msgSend", objc))
+        geraet = metal.MTLCreateSystemDefaultDevice()
+        if not geraet:
+            return None
+        wert = senden(geraet, objc.sel_registerName(b"recommendedMaxWorkingSetSize"))
+        return wert / GIB if wert else None
+    except (OSError, AttributeError):
+        return None
+
+
 def speicher() -> tuple[float, float, float | None, float | None]:
     """(gesamt, belegt, swap belegt, swap gesamt) in GiB."""
     return _speicher_mac() if MAC else _speicher_linux()

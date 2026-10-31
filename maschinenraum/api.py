@@ -46,8 +46,11 @@ class DienstAnsicht(BaseModel):
     fremd: bool
     gb_jetzt: float | None          # gemessen, solange er läuft
     bedarf_gb: float                # was er laufend braucht; damit plant die Leitstelle
-    spitze_gb: float | None
-    schaetzung_gb: float
+    spitze_gb: float | None         # höchste gemessene Arbeitsspitze (neben der Anmeldung, damit Abweichungen auffallen)
+    schaetzung_gb: float            # angemeldet in der Dienstdatei (speicher_gb)
+    grenze_gb: float | None         # harte Grenze der Speicherwache; None: Wache aus
+    sperre: str | None              # nach einem Speicherabbruch gesperrt: der Grund
+    sperre_seit: str | None
     aktiv: bool
     cpu_prozent: float | None
     anhalten_erlaubt: bool
@@ -154,10 +157,11 @@ class Laufzeit:
     def ansicht(self) -> list[DienstAnsicht]:
         ergebnis = []
         for d in self.verwalter.dienste.values():
-            b, k, v = bericht(d), d.bericht(), d.vorlage
+            b, k, v = bericht(d, self.verwalter.speicherschutz), d.bericht(), d.vorlage
             ergebnis.append(DienstAnsicht(kennung=b.kennung, name=b.name, beschreibung=v.beschreibung, faehigkeiten=sorted(b.faehigkeiten, key=lambda f: f.value),
                                           port=b.port, oberflaeche=v.oberflaeche, zustand=b.zustand, fremd=b.fremd, gb_jetzt=b.gb_jetzt,
-                                          bedarf_gb=b.bedarf_gb, spitze_gb=k.spitze_gb, schaetzung_gb=v.speicher_gb, aktiv=b.aktiv,
+                                          bedarf_gb=b.bedarf_gb, spitze_gb=k.spitze_gb, schaetzung_gb=v.speicher_gb, grenze_gb=b.grenze_gb,
+                                          sperre=b.sperre, sperre_seit=d.stand.sperre.seit if d.stand.sperre else None, aktiv=b.aktiv,
                                           cpu_prozent=k.cpu_prozent, anhalten_erlaubt=b.anhalten_erlaubt, soll=k.soll, meldung=b.meldung,
                                           datei=str(self.ordner.dienste_ordner / f"{b.kennung}.toml"), protokolldatei=str(d.protokolldatei()),
                                           ordner=str(v.ordner)))
@@ -222,6 +226,11 @@ def erstellen(ordner: Ordner) -> FastAPI:
     async def neustarten(kennung: str) -> BefehlErgebnis:
         dienst(kennung)
         return await lz.verwalter.neu_starten_befehl(kennung)
+
+    @app.post("/api/dienste/{kennung}/entsperren")
+    async def entsperren(kennung: str) -> Ergebnis:
+        """Nur von Hand (die Leitstelle kann das nicht): die Sperre nach einem Speicherabbruch aufheben; startet nichts."""
+        return lz.verwalter.entsperren(dienst(kennung).kennung)
 
     @app.get("/api/dienste/{kennung}/protokoll")
     async def protokoll(kennung: str, zeilen: int = 200) -> Protokollauszug:

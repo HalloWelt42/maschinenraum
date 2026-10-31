@@ -130,6 +130,14 @@ class Leitstellenkanal:
         self._ausfall = Ausfall()
         self._vermerkt: dict[str, asyncio.Future[None]] = {}
         self._waechter: asyncio.Task | None = None
+        verwalter.vor_speicherabbruch = self._speicherabbruch_melden
+
+    async def _speicherabbruch_melden(self, _eingriff: Any) -> None:
+        """Die Speicherwache beendet gleich einen Dienst: die Dienstliste mit seiner Sperre sofort an die Leitstelle, damit sie
+        den Grund kennt, bevor die Verbindung zum Dienst abreißt (sie bricht den Auftrag dann ab, statt ihn zu wiederholen)."""
+        if self._senden is not None:
+            with contextlib.suppress(websockets.exceptions.ConnectionClosed, OSError):
+                await self._senden(_umschlag("knoten.dienste", self.verwalter.liste()))
 
     def _setzen(self, zustand: Verbindung, meldung: str = "") -> None:
         if zustand != self.stand.zustand or meldung != self.stand.meldung:

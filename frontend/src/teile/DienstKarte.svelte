@@ -4,18 +4,34 @@
   import { gb } from '../lib/format';
   import { lage } from '../lib/stand.svelte';
   import { meldungen } from '../lib/meldung.svelte';
-  import type { BefehlErgebnis, DienstAnsicht } from '../lib/typen.gen';
+  import type { BefehlErgebnis, DienstAnsicht, Ergebnis } from '../lib/typen.gen';
   import { FAEHIGKEIT, ZUSTAND } from '../lib/wort';
   import Protokoll from './Protokoll.svelte';
 
   let { dienst: d }: { dienst: DienstAnsicht } = $props();
 
-  let arbeitet = $state<'' | 'starten' | 'anhalten' | 'neustarten'>('');
-  let fragen = $state<'' | 'anhalten' | 'neustarten'>('');
+  let arbeitet = $state<'' | 'starten' | 'anhalten' | 'neustarten' | 'entsperren'>('');
+  let fragen = $state<'' | 'anhalten' | 'neustarten' | 'entsperren'>('');
   let protokollOffen = $state(false);
 
   const z = $derived(ZUSTAND[d.zustand]);
   const laeuft = $derived(d.zustand === 'laeuft' || d.zustand === 'startet' || d.zustand === 'stoppt');
+  // Gemessene Spitze deutlich über der Anmeldung: fällt sofort auf (die Grenze leitet sich aus der Anmeldung ab)
+  const abweichung = $derived(d.spitze_gb != null && d.spitze_gb > d.schaetzung_gb * 1.2 + 0.5);
+
+  async function entsperren() {
+    fragen = '';
+    arbeitet = 'entsperren';
+    try {
+      const e: Ergebnis = await api.entsperren(d.kennung);
+      meldungen.zeigen(`${d.name}: ${e.meldung}`, e.erfolg ? 'erfolg' : 'fehler');
+    } catch (f) {
+      meldungen.fehler(f);
+    } finally {
+      arbeitet = '';
+      await lage.jetzt();
+    }
+  }
 
   async function tun(art: 'starten' | 'anhalten' | 'neustarten') {
     fragen = '';
@@ -37,7 +53,7 @@
   <header>
     <span class="zustand {z.klasse}"><i class="fa-solid {arbeitet ? 'fa-circle-notch fa-spin' : z.symbol}"></i>{arbeitet === 'starten' ? 'Startet' : arbeitet === 'anhalten' ? 'Hält an' : arbeitet === 'neustarten' ? 'Startet neu' : z.wort}</span>
     <h2>{d.name}</h2>
-    <div class="speicherzahl" title="Bedarf: höchster je gemessener Wert, mindestens die Schätzung der Dienstdatei ({gb(d.schaetzung_gb)}). Mit diesem Wert plant die Leitstelle.">
+    <div class="speicherzahl" title="Bedarf: der Wert, mit dem 80 Prozent der jüngsten Arbeitsphasen auskamen, mindestens die Anmeldung der Dienstdatei ({gb(d.schaetzung_gb)}). Mit diesem Wert plant die Leitstelle.">
       <b class="zahl">{gb(d.bedarf_gb)}</b><span>Bedarf{d.spitze_gb ? '' : ', geschätzt'}</span>
       {#if d.gb_jetzt != null}<span class="jetzt" title="Gerade gemessen; Dienste laden ihre Modelle oft erst bei Bedarf">jetzt <b class="zahl">{gb(d.gb_jetzt)}</b></span>{/if}</div>
   </header>
@@ -55,19 +71,37 @@
   {#if d.fremd}
     <div class="hinweis klein"><i class="fa-solid fa-circle-info"></i><span>Von außen gestartet. Der Maschinenraum misst ihn und kann ihn anhalten; der nächste Start geschieht von hier.</span></div>
   {/if}
-  {#if d.meldung && !d.fremd}
+  <div class="speicherreihe">
+    <span title="Angemeldet in der Dienstdatei (speicher_gb); daraus leitet sich die Grenze ab"><i class="fa-solid fa-file-lines"></i> angemeldet <b class="zahl">{gb(d.schaetzung_gb)}</b></span>
+    <span class:abweichung title={abweichung ? 'Die gemessene Spitze liegt deutlich über der Anmeldung: speicher_gb in der Dienstdatei anheben oder den Dienst prüfen' : 'Höchste gemessene Arbeitsspitze (physischer Fußabdruck aller Prozesse, samt Grafikspeicher)'}>
+      <i class="fa-solid {abweichung ? 'fa-triangle-exclamation' : 'fa-chart-line'}"></i> Spitze gemessen <b class="zahl">{d.spitze_gb != null ? gb(d.spitze_gb) : '-'}</b></span>
+    {#if d.grenze_gb != null}<span title="Harte Grenze: darüber beendet die Speicherwache den Dienst sofort und sperrt ihn; der Dienst kennt sie auch selbst (MASCHINENRAUM_SPEICHER_GRENZE_GB, für torch als Marken)"><i class="fa-solid fa-shield-halved"></i> Grenze <b class="zahl">{gb(d.grenze_gb)}</b></span>{/if}
+  </div>
+
+  {#if d.sperre}
+    <div class="hinweis klein gefahr sperre"><i class="fa-solid fa-ban"></i>
+      <span><b>Gesperrt</b>{d.sperre_seit ? ` seit ${new Date(d.sperre_seit).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}` : ''}: {d.sperre}. Er startet nicht wieder, weder mit dem Rechner noch auf Wunsch der Leitstelle, bis die Sperre hier aufgehoben ist.</span></div>
+  {:else if d.meldung && !d.fremd}
     <div class="hinweis klein {d.zustand === 'gestoert' ? 'gefahr' : 'warnung'}"><i class="fa-solid fa-triangle-exclamation"></i><span>{d.meldung}</span></div>
   {/if}
 
   {#if fragen}
     <div class="bestaetigen"><i class="fa-solid fa-triangle-exclamation"></i>
-      <span>{d.name} {fragen === 'anhalten' ? 'anhalten' : 'neu starten'}? Wer ihn gerade nutzt, verliert die Verbindung{fragen === 'anhalten' && d.gb_jetzt != null ? '; er gibt etwa ' + gb(d.gb_jetzt) + ' frei' : ''}.</span>
-      <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
-        <button class="knopf klein gefahr-voll" onclick={() => tun(fragen as 'anhalten' | 'neustarten')}>{fragen === 'anhalten' ? 'Ja, anhalten' : 'Ja, neu starten'}</button></div></div>
+      {#if fragen === 'entsperren'}
+        <span>Sperre von {d.name} aufheben? Erst, wenn die Ursache behoben ist (etwa speicher_gb oder der Dienst selbst); gestartet wird damit noch nichts.</span>
+        <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
+          <button class="knopf klein gefahr-voll" onclick={entsperren}>Ja, Sperre aufheben</button></div>
+      {:else}
+        <span>{d.name} {fragen === 'anhalten' ? 'anhalten' : 'neu starten'}? Wer ihn gerade nutzt, verliert die Verbindung{fragen === 'anhalten' && d.gb_jetzt != null ? '; er gibt etwa ' + gb(d.gb_jetzt) + ' frei' : ''}.</span>
+        <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
+          <button class="knopf klein gefahr-voll" onclick={() => tun(fragen as 'anhalten' | 'neustarten')}>{fragen === 'anhalten' ? 'Ja, anhalten' : 'Ja, neu starten'}</button></div>
+      {/if}</div>
   {/if}
 
   <footer>
-    {#if !laeuft}
+    {#if d.sperre}
+      <button class="knopf haupt" disabled={!!arbeitet} onclick={() => (fragen = 'entsperren')} title="Sperre nach dem Speicherabbruch aufheben (startet nichts)"><i class="fa-solid fa-lock-open"></i> Sperre aufheben</button>
+    {:else if !laeuft}
       <button class="knopf haupt" disabled={!!arbeitet} onclick={() => tun('starten')} title="Starten und warten, bis er antwortet"><i class="fa-solid fa-play"></i> Starten</button>
     {:else}
       <button class="knopf" disabled={!!arbeitet} onclick={() => (fragen = 'anhalten')} title="Erst freundlich beenden, nach der Anhaltezeit hart"><i class="fa-solid fa-stop"></i> Anhalten</button>
@@ -90,6 +124,9 @@
   .speicherzahl span { display: block; font-size: var(--mr-gr-marke); color: var(--mr-text-3); }
   .speicherzahl .jetzt b { display: inline; font-size: var(--mr-gr-marke); color: var(--mr-text-2); }
   .arbeitet { color: var(--mr-akzent-schrift); }
+  .speicherreihe { display: flex; align-items: center; gap: var(--mr-a2) var(--mr-a4); flex-wrap: wrap; font-size: var(--mr-gr-klein); color: var(--mr-text-2); }
+  .speicherreihe b { color: var(--mr-text); font-weight: 600; }
+  .speicherreihe .abweichung, .speicherreihe .abweichung b { color: var(--mr-warnung); }
   .unter { display: flex; align-items: center; gap: var(--mr-a2) var(--mr-a4); flex-wrap: wrap; font-size: var(--mr-gr-klein); color: var(--mr-text-2); }
   .beschreibung { color: var(--mr-text-2); font-size: var(--mr-gr-klein); }
   footer { display: flex; align-items: center; gap: var(--mr-a2); flex-wrap: wrap; }

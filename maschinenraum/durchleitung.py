@@ -3,7 +3,9 @@
 Die Dienste lauschen nur auf diesem Rechner (127.0.0.1); niemand im Netz spricht sie direkt an. Die Leitstelle
 ruft `/<dienst>/<pfad>` mit ihrem Schlüssel als Bearer auf, der Maschinenraum reicht Anfrage und Antwort
 unverändert weiter (Körper und Antwort als Strom, ohne Lese-Zeitgrenze: Arbeit darf dauern). Ohne Schlüssel,
-mit falschem Schlüssel oder an einen Dienst, der nicht läuft, gibt es eine klare Absage mit Grundwort.
+mit falschem Schlüssel oder an einen Dienst, der nicht läuft, gibt es eine klare Absage mit Grundwort. Ein Dienst, den die
+Speicherwache gesperrt hat, antwortet mit 423 `dienst_gesperrt`; beendet sie ihn mitten in einem Auftrag, bevor er
+geantwortet hat, kommt 507 `speicher` mit dem Grund (beides endgültig, nicht zum Wiederholen).
 
 Abbruch reicht durch: schließt die Leitstelle ihre Verbindung, schließt die Durchleitung ihre zum Dienst, auch solange
 der Dienst noch rechnet und noch nichts geantwortet hat (ein Bilddienst antwortet erst mit dem fertigen Bild). Der Dienst
@@ -36,7 +38,9 @@ OHNE_KOPF = {"host", "authorization", "content-length", "connection", "keep-aliv
 
 
 def _absage(status: int, grund: str, meldung: str) -> JSONResponse:
-    return JSONResponse({"grund": grund, "meldung": meldung}, status_code=status)
+    """Grundwort und Satz, dazu im Fehlerformat der Leitstelle (`error.code`), das Apps auch roh durchgereicht lesen."""
+    return JSONResponse({"grund": grund, "meldung": meldung, "error": {"code": grund, "message": meldung}}, status_code=status,
+                        headers={"X-Maschinenraum-Grund": grund})
 
 
 async def _koerper(request: Request, gesendet: asyncio.Event) -> AsyncIterator[bytes]:
@@ -106,6 +110,8 @@ def erstellen(laufzeit) -> FastAPI:
             return _absage(404, "unbekannt", f"Diesen Dienst gibt es hier für die Leitstelle nicht: {dienst}")
         if d.vorlage.port is None:
             return _absage(409, "ohne_port", f"{d.vorlage.name} hat keinen Port, an den man Anfragen richten kann.")
+        if d.stand.sperre is not None:
+            return _absage(423, "dienst_gesperrt", f"{d.vorlage.name} {d.sperrsatz}.")
         if d.zustand != Zustand.LAEUFT:
             return _absage(409, "dienst_aus", f"{d.vorlage.name} läuft nicht ({d.zustand.value}).")
         return f"http://127.0.0.1:{d.vorlage.port}", d.vorlage.name
@@ -127,6 +133,9 @@ def erstellen(laufzeit) -> FastAPI:
                                                  request, gesendet)
         except (httpx.HTTPError, ClientDisconnect) as f:
             laufzeit.durchleitungen -= 1
+            d = laufzeit.verwalter.dienste.get(dienst)
+            if d is not None and d.stand.sperre is not None:     # die Speicherwache hat ihn mitten im Auftrag beendet
+                return _absage(507, "speicher", f"{name}: {d.stand.sperre.grund}")
             return _absage(502, "dienst_nicht_erreichbar", f"{name}: {type(f).__name__} {f}".strip())
         if antwort is None:
             laufzeit.durchleitungen -= 1

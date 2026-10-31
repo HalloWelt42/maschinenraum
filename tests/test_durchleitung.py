@@ -85,7 +85,7 @@ def _langsamer_dienst(merker: dict) -> FastAPI:
 
 
 def _laufzeit(port: int) -> SimpleNamespace:
-    dienst = SimpleNamespace(kennung="bild", zustand=Zustand.LAEUFT, vorlage=SimpleNamespace(port=port, name="Bilddienst"))
+    dienst = SimpleNamespace(kennung="bild", zustand=Zustand.LAEUFT, vorlage=SimpleNamespace(port=port, name="Bilddienst"), stand=SimpleNamespace(sperre=None))
     return SimpleNamespace(ordner=SimpleNamespace(schluessel=lambda: "ls_probe"), verwalter=SimpleNamespace(dienste={"bild": dienst}),
                            durchleitungen=0)
 

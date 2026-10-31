@@ -134,7 +134,7 @@ async def test_plaetze_aus_der_dienstdatei_und_start_der_leitstelle(tmp_path: Pa
     o = ordner_mit_dienst(tmp_path, port, plaetze="4")
     v = verwalter(o)
     await v.runde()
-    assert bericht(v.dienste["probe"]).plaetze == 4
+    assert bericht(v.dienste["probe"], v.speicherschutz).plaetze == 4
     v.dienste["probe"].abstuerze.extend([0.0] * (v.regeln.im_fenster + 1))
     e = await v.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="probe"), von_leitstelle=True)
     assert not e.erfolg and "bleibt nach" in e.meldung
@@ -151,7 +151,7 @@ async def test_selbstauskunft_aus_der_dienstdatei(tmp_path: Path):
     o = ordner_mit_dienst(tmp_path, port, beschreibung='"Sprechen mit fester Stimme, für Vorlesen"', eignung='["schnell"]', sprachen='["de", "en"]')
     v = verwalter(o)
     await v.runde()
-    a = bericht(v.dienste["probe"]).selbstauskunft
+    a = bericht(v.dienste["probe"], v.speicherschutz).selbstauskunft
     assert a.zweck == "Sprechen mit fester Stimme, für Vorlesen" and a.eignung == [Eignung.SCHNELL] and a.sprachen == ["de", "en"]
     try:
         DienstVorlage.model_validate({"kennung": "x", "name": "x", "ordner": str(tmp_path), "befehl": ["x"], "faehigkeiten": ["stimme"], "sprachen": ["Deutsch"]})

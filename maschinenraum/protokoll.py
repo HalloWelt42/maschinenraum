@@ -100,6 +100,8 @@ class ProzessBericht(BaseModel):
     selbstauskunft: Selbstauskunft = Field(default_factory=Selbstauskunft)   # aus seiner Dienstdatei
     instanz_von: str | None = None      # weitere Instanz dieses Dienstes (Kennung <grund>.<n>); None: Grundinstanz
     instanzen: int = 1                  # so viele Instanzen darf die Leitstelle höchstens starten
+    grenze_gb: float | None = None      # harte Grenze: darüber beendet der Agent ihn sofort; None: ohne Speicherwache
+    sperre: str | None = None           # nach einem Speicherabbruch gesperrt (der Grund); startet erst wieder, wenn ein Mensch sie aufhebt
     meldung: str = ""
 
 

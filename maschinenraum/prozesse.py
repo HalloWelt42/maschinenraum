@@ -22,13 +22,15 @@ from pathlib import Path
 
 from dienstkern.dienst import Dienst
 from dienstkern.messen import Prozesstabelle
+from dienstkern.speicherwache import grenze_gb
 from dienstkern.verwalter import Ergebnis, Neustartregeln
 from dienstkern.verwalter import Verwalter as Kernverwalter
 from dienstkern.zustand import DienstStand, Soll, Zustand
 
 from dienstkern.vorlage import Ladefehler
 
-from .konfig import HF_ORDNER, INSTANZ_PORT_ABSTAND, MODELLE_VARIABLE, PORT_VARIABLE, DienstVorlage, Einstellungen, Ordner
+from .konfig import HF_ORDNER, INSTANZ_PORT_ABSTAND, MODELLE_VARIABLE, PORT_VARIABLE, DienstVorlage, Einstellungen, Ordner, Speicherschutz
+from .messen import grafik_arbeitsmenge_gb
 from .protokoll import Befehl, BefehlErgebnis, Befehlsart, Dienstliste, ProzessBericht, Prozesszustand, Selbstauskunft
 
 __all__ = ["Soll", "Verwalter", "bericht"]
@@ -62,7 +64,27 @@ def mit_ablage(v: DienstVorlage, modelle: Path) -> DienstVorlage:
     return v.model_copy(update={"umgebung": {**ablage, **v.umgebung}})
 
 
-def bericht(d: Dienst) -> ProzessBericht:
+GRENZE_VARIABLE = "MASCHINENRAUM_SPEICHER_GRENZE_GB"   # Umgebung jedes Dienstes: seine harte Grenze in GiB
+TORCH_HOCH = "PYTORCH_MPS_HIGH_WATERMARK_RATIO"
+TORCH_NIEDRIG = "PYTORCH_MPS_LOW_WATERMARK_RATIO"
+
+
+def mit_grenze(v: DienstVorlage, schutz: Speicherschutz, grafik_gb: float | None) -> DienstVorlage:
+    """Die Grenze auch im Prozess: als Zahl für jeden Dienst (MLX-Dienste setzen damit ihr eigenes Speicherlimit) und als
+    Marken für torch auf der Grafik, die torch auf seine empfohlene Arbeitsmenge bezieht (darüber scheitert die nächste
+    Zuteilung mit einem Fehler, statt dass der Prozess weiterwächst; ohne Angabe räumt torch erst beim 1,4-Fachen auf und
+    hört beim 1,7-Fachen auf). Einträge der Dienstdatei gehen vor."""
+    if not schutz.grenze_im_prozess:
+        return v
+    g = grenze_gb(v, schutz)
+    werte = {GRENZE_VARIABLE: f"{g:g}"}
+    if grafik_gb:
+        hoch = g / grafik_gb
+        werte |= {TORCH_HOCH: f"{hoch:.4f}", TORCH_NIEDRIG: f"{hoch * schutz.aufraeumen_anteil:.4f}"}
+    return v.model_copy(update={"umgebung": {**werte, **v.umgebung}})
+
+
+def bericht(d: Dienst, schutz: Speicherschutz) -> ProzessBericht:
     """Stand eines Dienstes im Format, das die Leitstelle erwartet."""
     b, v = d.bericht(), d.vorlage
     assert isinstance(v, DienstVorlage)
@@ -70,7 +92,8 @@ def bericht(d: Dienst) -> ProzessBericht:
     return ProzessBericht(kennung=b.kennung, name=b.name, faehigkeiten=set(v.faehigkeiten), port=b.port, zustand=Prozesszustand(b.zustand.value),
                           fremd=b.fremd, gb_jetzt=b.gb_jetzt, bedarf_gb=b.bedarf_gb, aktiv=b.aktiv, anhalten_erlaubt=v.leitstelle_anhalten,
                           plaetze=v.plaetze, selbstauskunft=Selbstauskunft(zweck=v.beschreibung, eignung=list(v.eignung), sprachen=list(v.sprachen)),
-                          instanz_von=grund if stufe > 1 else None, instanzen=v.instanzen, meldung=b.meldung)
+                          instanz_von=grund if stufe > 1 else None, instanzen=v.instanzen,
+                          grenze_gb=grenze_gb(v, schutz) if schutz.aktiv else None, sperre=b.sperre, meldung=b.meldung)
 
 
 def _als_befehlergebnis(art: Befehlsart, e: Ergebnis) -> BefehlErgebnis:
@@ -90,7 +113,7 @@ class Verwalter(Kernverwalter):
     def _vorlagen(self) -> tuple[list[DienstVorlage], list[Ladefehler]]:
         """Die Dienstdateien und die weiteren Instanzen, abgeleitet aus der jeweils gültigen Datei (folgen ihr)."""
         vorlagen, fehler = self.ordner.dienste()
-        vorlagen = [mit_ablage(v, self.ordner.modelle) for v in vorlagen]
+        vorlagen = [mit_grenze(mit_ablage(v, self.ordner.modelle), self.einstellungen.speicherschutz, grafik_arbeitsmenge_gb()) for v in vorlagen]
         gruende = {v.kennung: v for v in vorlagen}
         for k in list(self.weitere):
             grund, stufe = grund_und_stufe(k)
@@ -150,6 +173,10 @@ class Verwalter(Kernverwalter):
     def takt_s(self) -> float:
         return self.einstellungen.messung.takt_s
 
+    @property
+    def speicherschutz(self) -> Speicherschutz:
+        return self.einstellungen.speicherschutz
+
     async def befehl(self, b: Befehl, von_leitstelle: bool = False) -> BefehlErgebnis:
         """Starten oder anhalten. Die Leitstelle darf nur anhalten, was die Dienstdatei ihr erlaubt; von Hand geht immer."""
         d = self.dienste.get(b.ziel)
@@ -177,4 +204,4 @@ class Verwalter(Kernverwalter):
         return _als_befehlergebnis(Befehlsart.DIENST_STARTEN, await self.neu_starten(kennung))
 
     def liste(self) -> Dienstliste:
-        return Dienstliste(dienste=[bericht(d) for d in self.dienste.values()])
+        return Dienstliste(dienste=[bericht(d, self.speicherschutz) for d in self.dienste.values()])

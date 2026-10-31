@@ -108,7 +108,8 @@ werden mit einer lesbaren Meldung übergangen.
 | `sprachen` | leer | Sprachen, die er kann, als Kürzel nach ISO 639-1 (`de`, `en`); leer heißt nicht angegeben (Selbstauskunft) |
 | `plaetze` | 1 | so viele Anfragen nimmt er gleichzeitig an; die Leitstelle teilt danach zu |
 | `instanzen` | 1 | so viele Prozesse darf die Leitstelle bei Andrang starten; Instanz n heißt `<kennung>.<n>`, läuft auf `port + 100 (n-1)` und bekommt ihren Port in `MASCHINENRAUM_PORT` (im `befehl` als `$MASCHINENRAUM_PORT`, Pflicht ab 2). Weitere Instanzen folgen der Datei; angehalten sind sie weg, nach einem Neustart des Maschinenraums werden laufende wiedergefunden (siehe unten) |
-| `speicher_gb` | 1 | Schätzung, bis der Maschinenraum den Dienst gemessen hat |
+| `speicher_gb` | 1 | Anmeldung: was der Dienst bei der Arbeit braucht; Grundlage der Planung und der harten Grenze (ehrlich angeben, die Oberfläche zeigt die gemessene Spitze daneben) |
+| `speicher_grenze_gb` | leer | eigene harte Grenze; leer: `speicher_gb` mal Faktor plus Zuschlag (Speicherschutz) |
 | `startzeit_s` | 120 | so lange darf der Start bis zur Erreichbarkeit dauern |
 | `anhaltezeit_s` | 20 | so lange darf das Beenden dauern, danach hart |
 | `umgebung` | leer | zusätzliche Umgebungsvariablen |
@@ -167,9 +168,32 @@ unberührt. Erst wenn alles Laufende übernommen ist, beginnt die Beobachtung; v
 ## Speicherbedarf
 
 Je Dienst gibt es zwei Zahlen. **Jetzt** ist, was seine Prozesse gerade belegen. **Bedarf** ist, was er laufend
-braucht: der höchste je gemessene Wert, mindestens die Schätzung `speicher_gb` der Dienstdatei. Viele Dienste laden
-ihre Modelle erst beim ersten Auftrag; gleich nach dem Start belegen sie wenig. Eine Leitstelle plant deshalb mit dem
-Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
+braucht: der Wert, mit dem 80 Prozent der jüngsten Arbeitsphasen auskamen, mindestens die Anmeldung `speicher_gb` der
+Dienstdatei. Viele Dienste laden ihre Modelle erst beim ersten Auftrag; gleich nach dem Start belegen sie wenig. Eine
+Leitstelle plant deshalb mit dem Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt. Die Oberfläche
+zeigt neben der Anmeldung die höchste gemessene Spitze; liegt sie deutlich darüber, ist sie markiert.
+
+## Speicherschutz
+
+Die Anmeldung `speicher_gb` ist auch eine Zusage: jeder Dienst hat eine **harte Grenze**, `speicher_grenze_gb` der
+Dienstdatei oder sonst `speicher_gb` mal `faktor` plus `zuschlag_gb` (Vorgabe 1,5 und 4 GB). Die Speicherwache misst
+jede Sekunde den physischen Fußabdruck aller Prozesse eines Dienstes (auf dem Mac samt Grafikspeicher, für MLX wie für
+torch). Liegt ein Dienst über seiner Grenze, oder wird der Rechner knapp (freier Anteil unter
+`frei_mindestens_prozent`, kritischer Speicherdruck, Auslagerung über `swap_hoechstens_gb`, schneller wachsend als
+`swap_zuwachs_gb_je_min` oder bei Druck länger als `swap_geduldet_s` über `swap_geduldet_gb`), beendet sie den Dienst,
+der am weitesten über seiner Anmeldung liegt, sofort und hart, nachdem sie der Leitstelle die Sperre gemeldet hat. Kurze,
+kleine Auslagerung wird geduldet; wer im Rahmen seiner Anmeldung bleibt, wird nie beendet.
+
+Danach ist der Dienst **gesperrt**, mit Grund und Zeit im Stand (übersteht Neustarts): kein Sollzustand, keine
+Absturzregel, kein Befehl der Leitstelle und keine Abhängigkeit startet ihn. Ein Auftrag, der gerade lief, endet bei der
+Leitstelle mit 507 `speicher`, neue mit 423 `dienst_gesperrt`. Die Sperre hebt nur ein Mensch in der Oberfläche auf
+("Sperre aufheben"); gestartet wird damit noch nichts.
+
+Zusätzlich bekommt jeder Dienst seine Grenze beim Start selbst (`grenze_im_prozess`): `MASCHINENRAUM_SPEICHER_GRENZE_GB`
+(ein MLX-Dienst setzt damit sein eigenes Limit) und für torch auf der Grafik `PYTORCH_MPS_HIGH_WATERMARK_RATIO` als
+Grenze je empfohlener Arbeitsmenge der Grafik, dazu `PYTORCH_MPS_LOW_WATERMARK_RATIO` (`aufraeumen_anteil` davon). torch
+scheitert dann mit einem Fehler, statt weiterzuwachsen; ohne Angabe räumt es erst beim 1,4-Fachen auf. Einträge der
+Dienstdatei gehen vor.
 
 ## Einstellungen
 
@@ -195,6 +219,14 @@ Bedarf und hält so Platz frei, rechnet aber nur den Ist-Wert als belegt.
 | `beobachtung` | `modelldateien` | .gguf, .safetensors | Endungen von Modelldateien: ein Prozess des Läufers, der eine davon offen hat, ist ein Arbeiter |
 | `beobachtung` | `arbeiter_bibliotheken` | /extensions/backends/ | Ordnerteile im Pfad von Bibliotheken eines Rechenwerks: ein Prozess des Läufers, der eine Bibliothek daraus geladen hat, ist ein Arbeiter, auch ohne offene Modelldatei |
 | `beobachtung` | `anhaltezeit_s` | 10 | so lange darf ein Arbeiter des Läufers nach der Bitte um Beenden aufräumen, dann wird er hart beendet |
+| `speicherschutz` | `aktiv`, `takt_s` | ja, 1 | Speicherwache an, Abstand der Messungen |
+| `speicherschutz` | `faktor`, `zuschlag_gb` | 1,5, 4 | Grenze ohne `speicher_grenze_gb`: `speicher_gb` mal Faktor plus Zuschlag |
+| `speicherschutz` | `frei_mindestens_prozent`, `druck_kritisch` | 8, ja | darunter frei oder bei kritischem Druck gilt der Rechner als knapp |
+| `speicherschutz` | `ueberschuss_mindestens_gb` | 1 | bei knappem Rechner nur ein Dienst, der so weit über seiner Anmeldung liegt |
+| `speicherschutz` | `swap_hoechstens_gb` | 24 | mehr Auslagerung gilt als knapp (0: aus) |
+| `speicherschutz` | `swap_geduldet_gb`, `swap_geduldet_s`, `swap_dauer_nur_bei_druck` | 4, 300, ja | so viel Auslagerung höchstens so lange am Stück (nur bei Speicherdruck) |
+| `speicherschutz` | `swap_zuwachs_gb_je_min`, `swap_zuwachs_fenster_s` | 4, 60 | schneller wachsende Auslagerung gilt als knapp (0: aus) |
+| `speicherschutz` | `grenze_im_prozess`, `aufraeumen_anteil` | ja, 0,8 | Grenze auch in der Umgebung des Dienstes (siehe Speicherschutz) |
 | `schlaf` | `melden` | ja | auf dem Mac: beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, bis er wach ist |
 | `schlaf` | `leerlauf_aufschieben` | ja | solange die Leitstelle über diesen Rechner rechnen lässt, kein Schlaf nach Leerlauf; Deckel, Menü und Ein-Taste wirken weiter |
 
@@ -287,6 +319,7 @@ Der Läufer meldet die Instanz danach als entladen, und die Leitstelle lädt bei
 | `GET /api/stand` | alle Dienste, Messwerte, Leitstelle, Modell-Läufer |
 | `GET /api/version` | Fassung des laufenden Programms; weicht sie von der eingebauten ab, lädt die Oberfläche von selbst neu |
 | `POST /api/dienste/<kennung>/starten`, `/anhalten`, `/neustarten` | schalten; Antwort mit Erfolg und Meldung |
+| `POST /api/dienste/<kennung>/entsperren` | Sperre nach einem Speicherabbruch aufheben (nur hier, nie von der Leitstelle); startet nichts |
 | `GET /api/dienste/<kennung>/protokoll?zeilen=200` | Ende der Protokolldatei |
 | `PUT /api/leitstelle` | Adresse und Schlüssel der Leitstelle setzen oder entfernen |
 
