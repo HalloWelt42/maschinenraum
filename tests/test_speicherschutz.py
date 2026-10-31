@@ -106,4 +106,21 @@ def test_wachsender_dienst_wird_mitten_im_auftrag_beendet_und_gesperrt(tmp_path:
         assert lz.verwalter.dienste["hoerer"].stand.gruppe is None
         ansicht = next(d for d in oben.get("/api/stand").json()["dienste"] if d["kennung"] == "hoerer")
         assert ansicht["sperre"] is None and ansicht["zustand"] == "aus"
+
+        # Von Hand sperren (neuer Dienst bis zur Kurzmessung) und gemessene Spitzen verwerfen (nach einem Umbau)
+        assert oben.post("/api/dienste/hoerer/sperren", json={"grund": "x"}).status_code == 403
+        assert oben.post("/api/dienste/hoerer/sperren", headers=OBEN, json={"grund": ""}).status_code == 422
+        e = oben.post("/api/dienste/hoerer/sperren", headers=OBEN, json={"grund": "neu eingerichtet, Kurzmessung steht aus"}).json()
+        assert e["erfolg"], e
+        ansicht = next(d for d in oben.get("/api/stand").json()["dienste"] if d["kennung"] == "hoerer")
+        assert ansicht["sperre"] == "neu eingerichtet, Kurzmessung steht aus"
+        e = asyncio.run(lz.verwalter.befehl(Befehl(befehl=Befehlsart.DIENST_STARTEN, ziel="hoerer"), von_leitstelle=True))
+        assert not e.erfolg and "gesperrt" in e.meldung
+        assert oben.post("/api/dienste/hoerer/entsperren", headers=OBEN).json()["erfolg"]
+        lz.verwalter.dienste["hoerer"].stand.arbeitsspitzen = [4.27, 133.48]
+        e = oben.post("/api/dienste/hoerer/spitzen_verwerfen", headers=OBEN).json()
+        assert e["erfolg"] and "2 Arbeitsspitzen" in e["meldung"]
+        ansicht = next(d for d in oben.get("/api/stand").json()["dienste"] if d["kennung"] == "hoerer")
+        assert ansicht["spitze_gb"] is None
+        assert oben.post("/api/dienste/gibtsnicht/spitzen_verwerfen", headers=OBEN).status_code == 404
     assert json.loads((tmp_path / "zustand.json").read_text())["dienste"]["hoerer"]["sperre"] is None

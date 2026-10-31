@@ -4,7 +4,7 @@ description = "Maschinenraum: verwaltet die KI-Dienste eines Rechners an einem O
 requires-python = ">=3.11"
 dynamic = ["version"]
 dependencies = [
-  "dienstkern @ https://github.com/HalloWelt42/dienstkern/archive/63facf8ba5cbea40134416bdf4daff38844f8993.tar.gz",
+  "dienstkern @ https://github.com/HalloWelt42/dienstkern/archive/f86a43573e104c3829cb2b8fae794526081df7ff.tar.gz",
   "pydantic>=2.7",
   "websockets>=13",
   "fastapi>=0.115",

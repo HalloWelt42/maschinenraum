@@ -10,8 +10,9 @@
 
   let { dienst: d }: { dienst: DienstAnsicht } = $props();
 
-  let arbeitet = $state<'' | 'starten' | 'anhalten' | 'neustarten' | 'entsperren'>('');
-  let fragen = $state<'' | 'anhalten' | 'neustarten' | 'entsperren'>('');
+  let arbeitet = $state<'' | 'starten' | 'anhalten' | 'neustarten' | 'entsperren' | 'sperren' | 'verwerfen'>('');
+  let fragen = $state<'' | 'anhalten' | 'neustarten' | 'entsperren' | 'sperren' | 'verwerfen'>('');
+  let sperrgrund = $state('');
   let protokollOffen = $state(false);
 
   const z = $derived(ZUSTAND[d.zustand]);
@@ -20,10 +21,14 @@
   const abweichung = $derived(d.spitze_gb != null && d.spitze_gb > d.schaetzung_gb * 1.2 + 0.5);
 
   async function entsperren() {
+    await handeln('entsperren', () => api.entsperren(d.kennung));
+  }
+
+  async function handeln(art: 'entsperren' | 'sperren' | 'verwerfen', aufruf: () => Promise<Ergebnis>) {
     fragen = '';
-    arbeitet = 'entsperren';
+    arbeitet = art;
     try {
-      const e: Ergebnis = await api.entsperren(d.kennung);
+      const e: Ergebnis = await aufruf();
       meldungen.zeigen(`${d.name}: ${e.meldung}`, e.erfolg ? 'erfolg' : 'fehler');
     } catch (f) {
       meldungen.fehler(f);
@@ -75,6 +80,7 @@
     <span title="Angemeldet in der Dienstdatei (speicher_gb); daraus leitet sich die Grenze ab"><i class="fa-solid fa-file-lines"></i> angemeldet <b class="zahl">{gb(d.schaetzung_gb)}</b></span>
     <span class:abweichung title={abweichung ? 'Die gemessene Spitze liegt deutlich über der Anmeldung: speicher_gb in der Dienstdatei anheben oder den Dienst prüfen' : 'Höchste gemessene Arbeitsspitze (physischer Fußabdruck aller Prozesse, samt Grafikspeicher)'}>
       <i class="fa-solid {abweichung ? 'fa-triangle-exclamation' : 'fa-chart-line'}"></i> Spitze gemessen <b class="zahl">{d.spitze_gb != null ? gb(d.spitze_gb) : '-'}</b></span>
+    {#if d.spitze_gb != null}<button class="knopf klein ohne" disabled={!!arbeitet} onclick={() => (fragen = 'verwerfen')} title="Gemessene Spitzen verwerfen (nach einem Umbau)"><i class="fa-solid fa-eraser"></i> verwerfen</button>{/if}
     {#if d.grenze_gb != null}<span title="Harte Grenze: darüber beendet die Speicherwache den Dienst sofort und sperrt ihn; der Dienst kennt sie auch selbst (MASCHINENRAUM_SPEICHER_GRENZE_GB, für torch als Marken)"><i class="fa-solid fa-shield-halved"></i> Grenze <b class="zahl">{gb(d.grenze_gb)}</b></span>{/if}
   </div>
 
@@ -87,7 +93,18 @@
 
   {#if fragen}
     <div class="bestaetigen"><i class="fa-solid fa-triangle-exclamation"></i>
-      {#if fragen === 'entsperren'}
+      {#if fragen === 'sperren'}
+        <span>{d.name} sperren? Er hält an und startet nicht wieder, auch nicht auf Wunsch der Leitstelle, bis die Sperre hier
+          aufgehoben ist.</span>
+        <input class="eingabe grund" bind:value={sperrgrund} maxlength="300" placeholder="Grund, etwa: neu eingerichtet, Kurzmessung steht aus" />
+        <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
+          <button class="knopf klein gefahr-voll" disabled={!sperrgrund.trim()} onclick={() => handeln('sperren', () => api.sperren(d.kennung, sperrgrund.trim()))}>Ja, sperren</button></div>
+      {:else if fragen === 'verwerfen'}
+        <span>Gemessene Spitzen von {d.name} verwerfen? Sinnvoll nach einem Umbau, wenn die alten Werte nicht mehr gelten; der Bedarf
+          beginnt wieder bei der Anmeldung ({gb(d.schaetzung_gb)}).</span>
+        <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
+          <button class="knopf klein gefahr-voll" onclick={() => handeln('verwerfen', () => api.spitzenVerwerfen(d.kennung))}>Ja, verwerfen</button></div>
+      {:else if fragen === 'entsperren'}
         <span>Sperre von {d.name} aufheben? Erst, wenn die Ursache behoben ist (etwa speicher_gb oder der Dienst selbst); gestartet wird damit noch nichts.</span>
         <div class="rechts"><button class="knopf klein ohne" onclick={() => (fragen = '')}>Abbrechen</button>
           <button class="knopf klein gefahr-voll" onclick={entsperren}>Ja, Sperre aufheben</button></div>
@@ -100,13 +117,14 @@
 
   <footer>
     {#if d.sperre}
-      <button class="knopf haupt" disabled={!!arbeitet} onclick={() => (fragen = 'entsperren')} title="Sperre nach dem Speicherabbruch aufheben (startet nichts)"><i class="fa-solid fa-lock-open"></i> Sperre aufheben</button>
+      <button class="knopf haupt" disabled={!!arbeitet} onclick={() => (fragen = 'entsperren')} title="Sperre aufheben (startet nichts)"><i class="fa-solid fa-lock-open"></i> Sperre aufheben</button>
     {:else if !laeuft}
       <button class="knopf haupt" disabled={!!arbeitet} onclick={() => tun('starten')} title="Starten und warten, bis er antwortet"><i class="fa-solid fa-play"></i> Starten</button>
     {:else}
       <button class="knopf" disabled={!!arbeitet} onclick={() => (fragen = 'anhalten')} title="Erst freundlich beenden, nach der Anhaltezeit hart"><i class="fa-solid fa-stop"></i> Anhalten</button>
       <button class="knopf ohne" disabled={!!arbeitet} onclick={() => (fragen = 'neustarten')} title="Anhalten und wieder starten"><i class="fa-solid fa-rotate-right"></i> Neu starten</button>
     {/if}
+    {#if !d.sperre}<button class="knopf ohne" disabled={!!arbeitet} onclick={() => (fragen = 'sperren')} title="Sperren: hält an und startet nicht, bis die Sperre von Hand aufgehoben ist"><i class="fa-solid fa-lock"></i> Sperren</button>{/if}
     <button class="knopf ohne" class:aktiv={protokollOffen} onclick={() => (protokollOffen = !protokollOffen)} title="Ausgabe des Dienstes"><i class="fa-solid fa-scroll"></i> Protokoll</button>
     {#if d.oberflaeche && laeuft}<a class="knopf ohne" href={d.oberflaeche} target="_blank" rel="noopener" title="Eigene Oberfläche des Dienstes öffnen"><i class="fa-solid fa-arrow-up-right-from-square"></i> Öffnen</a>{/if}
     <span class="datei" title="Dienstdatei: Befehl, Ordner, Port, Umgebung">{d.datei}</span>
@@ -130,5 +148,6 @@
   .unter { display: flex; align-items: center; gap: var(--mr-a2) var(--mr-a4); flex-wrap: wrap; font-size: var(--mr-gr-klein); color: var(--mr-text-2); }
   .beschreibung { color: var(--mr-text-2); font-size: var(--mr-gr-klein); }
   footer { display: flex; align-items: center; gap: var(--mr-a2); flex-wrap: wrap; }
+  .grund { flex: 1 1 16rem; min-width: 0; }
   .datei { margin-left: auto; font-family: var(--mr-schrift-code); font-size: var(--mr-gr-marke); color: var(--mr-text-3); overflow-wrap: anywhere; }
 </style>

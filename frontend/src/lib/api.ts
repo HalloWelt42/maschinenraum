@@ -33,6 +33,8 @@ export const api = {
   anhalten: (k: string) => rufen<BefehlErgebnis>(`/dienste/${k}/anhalten`, 'POST'),
   neustarten: (k: string) => rufen<BefehlErgebnis>(`/dienste/${k}/neustarten`, 'POST'),
   entsperren: (k: string) => rufen<Ergebnis>(`/dienste/${k}/entsperren`, 'POST'),
+  sperren: (k: string, grund: string) => rufen<Ergebnis>(`/dienste/${k}/sperren`, 'POST', { grund }),
+  spitzenVerwerfen: (k: string) => rufen<Ergebnis>(`/dienste/${k}/spitzen_verwerfen`, 'POST'),
   protokoll: (k: string, zeilen = 300) => rufen<Protokollauszug>(`/dienste/${k}/protokoll?zeilen=${zeilen}`),
   eigenesProtokoll: (zeilen = 300) => rufen<Protokollauszug>(`/protokoll?zeilen=${zeilen}`),
   leitstelle: (d: LeitstellenDaten) => rufen<LeitstellenStand>('/leitstelle', 'PUT', d),

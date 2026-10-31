@@ -96,6 +96,10 @@ class Fassung(BaseModel):
     version: str
 
 
+class SperrenAnfrage(BaseModel):
+    grund: str = Field(min_length=1, max_length=300, description="ganzer Satz, so wie Oberfläche und Leitstelle ihn zeigen")
+
+
 class LeitstellenDaten(BaseModel):
     adresse: str | None = Field(default=None, max_length=255, description="leer: ohne Leitstelle")
     schluessel: str | None = Field(default=None, max_length=200, description="None: unverändert; leer: entfernen")
@@ -231,6 +235,16 @@ def erstellen(ordner: Ordner) -> FastAPI:
     async def entsperren(kennung: str) -> Ergebnis:
         """Nur von Hand (die Leitstelle kann das nicht): die Sperre nach einem Speicherabbruch aufheben; startet nichts."""
         return lz.verwalter.entsperren(dienst(kennung).kennung)
+
+    @app.post("/api/dienste/{kennung}/sperren")
+    async def sperren(kennung: str, anfrage: SperrenAnfrage) -> Ergebnis:
+        """Von Hand sperren (etwa ein neuer Dienst bis zur bestandenen Kurzmessung); läuft er, wird er angehalten."""
+        return await lz.verwalter.sperren(dienst(kennung).kennung, anfrage.grund)
+
+    @app.post("/api/dienste/{kennung}/spitzen_verwerfen")
+    async def spitzen_verwerfen(kennung: str) -> Ergebnis:
+        """Gemessene Arbeitsspitzen verwerfen (nach einem Umbau); der Bedarf beginnt wieder bei der Anmeldung."""
+        return lz.verwalter.spitzen_verwerfen(dienst(kennung).kennung)
 
     @app.get("/api/dienste/{kennung}/protokoll")
     async def protokoll(kennung: str, zeilen: int = 200) -> Protokollauszug:
