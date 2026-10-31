@@ -5,6 +5,12 @@ spätestens alle zehn Takte), im ruhigeren Takt der Beobachtung Zugriffe am Leit
 Last von Läufer, Rechner und Docker-Rechner (`knoten.last`), und Antworten auf Befehle. Ohne Verbindung arbeitet der Maschinenraum
 unverändert weiter. Der Zustand der Verbindung ist für die Oberfläche lesbar.
 
+Ausfall (die Leitstelle startet neu, das Netz bricht weg): neu verbinden mit wachsender Pause bis
+`wiederverbindung_max_s`, nach einer gelungenen Anmeldung wieder ab einer Sekunde. Ins Protokoll kommt je Ausfall eine Warnung
+(und eine weitere nur, wenn sich die Art ändert, etwa abgewiesen), die übrigen Versuche nur in die Fehlersuche, das
+Wiederverbinden als Zeile mit Dauer und Versuchen. Was eine Verbindung an Aufgaben startet (Empfang, Beobachtung), endet
+mit ihr; nach dem Neuverbinden kommt der aktuelle Stand neu (Anmeldung, Dienstliste, Messwerte, Beobachtung).
+
 Schlaf (schlaf.py meldet ihn): vor dem Einschlafen `knoten.schlaeft`, höchstens `VERMERK_S` auf
 `knoten.schlaf_vermerkt` warten (eine ältere Leitstelle antwortet nie), dann mit dem Grund `schlaeft` schließen. Bis zum
 Aufwachen ruht die Verbindung; danach sofort neu, eine noch offen scheinende Verbindung wird geschlossen. Ein Wächter
@@ -56,6 +62,32 @@ class Verbindung(str, Enum):
     SCHLAEFT = "schlaeft"             # der Rechner schläft; die Verbindung ruht bis zum Aufwachen
 
 
+class Ausfall:
+    """Ein Ausfall der Verbindung, vom ersten gescheiterten Versuch bis zur nächsten Anmeldung: entscheidet, welcher
+    Versuch eine Warnung wert ist (der erste und jeder, dessen Art sich ändert), und zählt für die Zeile beim Wiederverbinden."""
+
+    def __init__(self) -> None:
+        self.seit: float | None = None
+        self.versuche = 0
+        self._art: Verbindung | None = None
+
+    def gescheitert(self, art: Verbindung) -> bool:
+        """Ein gescheiterter Versuch; True, wenn er ins Protokoll gehört."""
+        if self.seit is None:
+            self.seit = time.monotonic()
+        self.versuche += 1
+        neu, self._art = art != self._art, art
+        return neu
+
+    def beenden(self) -> tuple[float, int] | None:
+        """Wieder verbunden: Dauer und Versuche des Ausfalls, None, wenn keiner war."""
+        if self.seit is None:
+            return None
+        ergebnis = (time.monotonic() - self.seit, self.versuche)
+        self.seit, self.versuche, self._art = None, 0, None
+        return ergebnis
+
+
 class LeitstellenStand(BaseModel):
     adresse: str | None
     zustand: Verbindung
@@ -95,6 +127,7 @@ class Leitstellenkanal:
         self._wach.set()
         self._unterbrechen = asyncio.Event()         # beendet die Pause vor dem nächsten Versuch (Aufwachen)
         self._pause_s = 1.0
+        self._ausfall = Ausfall()
         self._vermerkt: dict[str, asyncio.Future[None]] = {}
         self._waechter: asyncio.Task | None = None
 
@@ -197,7 +230,7 @@ class Leitstellenkanal:
             self._setzen(Verbindung.VERBINDET)
             try:
                 await self._verbunden(kanal)
-                self._pause_s = 1.0
+                self._setzen(Verbindung.NICHT_ERREICHBAR, "Verbindung beendet")
             except websockets.exceptions.InvalidStatus as f:
                 self._setzen(Verbindung.ABGEWIESEN, f"Leitstelle lehnt ab (Status {f.response.status_code})")
                 self._pause_s = pause_max
@@ -213,9 +246,29 @@ class Leitstellenkanal:
             if not self._wach.is_set():
                 self._setzen(Verbindung.SCHLAEFT, self.stand.meldung if self.stand.zustand == Verbindung.SCHLAEFT else "Rechner schläft")
                 continue                                     # eingeschlafen: kein Fehler, keine Pause
-            log.warning("Leitstelle: %s %s", self.stand.zustand.value, self.stand.meldung)
+            self._ausfall_melden(pause_max)
             await self._pause(self._pause_s)
             self._pause_s = min(self._pause_s * 2, pause_max)
+
+    def _ausfall_melden(self, pause_max: float) -> None:
+        """Ein gescheiterter Versuch: die erste Warnung des Ausfalls (oder einer neuen Art) ins Protokoll, sonst nur in die
+        Fehlersuche."""
+        if self._ausfall.gescheitert(self.stand.zustand):
+            log.warning("Leitstelle: %s %s; verbinde neu mit wachsender Pause bis %.0f s", self.stand.zustand.value,
+                        self.stand.meldung, pause_max)
+        else:
+            log.debug("Leitstelle: Versuch %d gescheitert (%s %s), nächster in %.0f s", self._ausfall.versuche,
+                      self.stand.zustand.value, self.stand.meldung, self._pause_s)
+
+    def _angemeldet(self, name: str | None) -> None:
+        """Die Leitstelle hat die Anmeldung angenommen: der Ausfall ist vorbei, die Pause beginnt wieder klein."""
+        self.stand = self.stand.model_copy(update={"name": name})
+        self._setzen(Verbindung.VERBUNDEN)
+        self._pause_s = 1.0
+        if (ausfall := self._ausfall.beenden()) is not None:
+            log.info("Bei der Leitstelle angemeldet als %s, wieder verbunden nach %.0f s und %d Versuchen", name, *ausfall)
+        else:
+            log.info("Bei der Leitstelle angemeldet als %s", name)
 
     async def _pause(self, s: float) -> None:
         """Bis zum nächsten Versuch; das Aufwachen beendet die Pause sofort."""
@@ -242,10 +295,7 @@ class Leitstellenkanal:
                 await self._senden_im_takt(senden, empfang)
             finally:
                 self._ws = self._senden = None
-                for aufgabe in (empfang, beobachten):
-                    aufgabe.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await aufgabe
+                await _aufgaben_beenden(empfang, beobachten)
             empfang.result()                                 # Verbindungsfehler des Empfangs weiterreichen
 
     async def _senden_im_takt(self, senden, empfang: asyncio.Task) -> None:
@@ -269,10 +319,12 @@ class Leitstellenkanal:
         Beginn zu Beginn, damit eine lange Messung den Abstand der Meldungen nicht dehnt. Gemessen wird erst, wenn der
         Start alle laufenden Dienste übernommen hat; vorher hielte die Beobachtung sie für fremd. Die Messer gelten je
         Verbindung (die erste Messung danach hat noch keine Prozente). Ein Fehler der Beobachtung trennt die Verbindung
-        nicht."""
+        nicht, ihr Ende beendet die Beobachtung (sie gehört zu genau einer Verbindung). Scheitert die Messung Takt für Takt
+        gleich, steht der Stapel einmal im Protokoll."""
         await self.verwalter.hochgefahren.wait()
         lastmesser = Lastmesser(lambda: self.verwalter.einstellungen)
         dockermesser = Dockermesser(lambda: self.verwalter.einstellungen)
+        fehler_vorher: str | None = None
         while True:
             beginn = time.monotonic()
             try:
@@ -281,10 +333,18 @@ class Leitstellenkanal:
                 last.docker = docker
                 await senden(_umschlag("knoten.fremde", fremde))
                 await senden(_umschlag("knoten.last", last))
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                log.exception("Beobachtung (am Leitstand vorbei, Last, Docker-Rechner) gescheitert")
+                if fehler_vorher is not None:
+                    log.info("Beobachtung wieder gelungen")
+                    fehler_vorher = None
+            except websockets.exceptions.ConnectionClosed:
+                return                                       # die Verbindung ist weg; die nächste bringt ihre eigene Beobachtung
+            except Exception as f:
+                fehler = f"{type(f).__name__}: {f}"
+                if fehler != fehler_vorher:
+                    log.exception("Beobachtung (am Leitstand vorbei, Last, Docker-Rechner) gescheitert")
+                else:
+                    log.debug("Beobachtung gescheitert wie zuvor: %s", fehler)
+                fehler_vorher = fehler
             await asyncio.sleep(max(0.0, self.verwalter.einstellungen.beobachtung.takt_s - (time.monotonic() - beginn)))
 
     def _beobachten(self, lastmesser: Lastmesser) -> tuple[Fremdzugriffe, KnotenLast]:
@@ -314,9 +374,7 @@ class Leitstellenkanal:
                 aufgaben.add(t)
                 t.add_done_callback(aufgaben.discard)
             elif u.art == "knoten.angemeldet":
-                self.stand = self.stand.model_copy(update={"name": u.nutzlast.get("name")})
-                self._setzen(Verbindung.VERBUNDEN)
-                log.info("Bei der Leitstelle angemeldet als %s", u.nutzlast.get("name"))
+                self._angemeldet(u.nutzlast.get("name"))
             elif u.art == "knoten.schlaf_vermerkt":
                 if (zukunft := self._vermerkt.get(u.bezug or "")) is not None and not zukunft.done():
                     zukunft.set_result(None)
@@ -332,5 +390,16 @@ class Leitstellenkanal:
             ergebnis = await self.laeuferaufsicht.beenden(b.ziel)
         else:
             ergebnis = await self.verwalter.befehl(b, von_leitstelle=True)
-        with contextlib.suppress(websockets.exceptions.ConnectionClosed):
+        try:
             await senden(_umschlag("knoten.befehl_ergebnis", ergebnis, bezug=u.id))
+        except websockets.exceptions.ConnectionClosed:
+            log.warning("Ergebnis von %s %s nicht zugestellt: Verbindung zur Leitstelle beendet (die Dienstliste nach dem "
+                        "Neuverbinden zeigt den Stand)", b.befehl.value, b.ziel)
+
+
+async def _aufgaben_beenden(*aufgaben: asyncio.Task) -> None:
+    """Erst alle abbrechen, dann auf alle warten: ein Fehler der einen (etwa der Empfang mit dem Schließgrund) darf das
+    Beenden der anderen nicht überspringen, sonst sendet eine Beobachtung weiter auf die tote Verbindung."""
+    for aufgabe in aufgaben:
+        aufgabe.cancel()
+    await asyncio.gather(*aufgaben, return_exceptions=True)
