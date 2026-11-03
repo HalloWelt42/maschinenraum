@@ -179,10 +179,12 @@ Die Anmeldung `speicher_gb` ist auch eine Zusage: jeder Dienst hat eine **harte 
 Dienstdatei oder sonst `speicher_gb` mal `faktor` plus `zuschlag_gb` (Vorgabe 1,5 und 4 GB). Die Speicherwache misst
 jede Sekunde den physischen Fußabdruck aller Prozesse eines Dienstes (auf dem Mac samt Grafikspeicher, für MLX wie für
 torch). Liegt ein Dienst über seiner Grenze, oder wird der Rechner knapp (freier Anteil unter
-`frei_mindestens_prozent`, kritischer Speicherdruck, Auslagerung über `swap_hoechstens_gb`, schneller wachsend als
-`swap_zuwachs_gb_je_min` oder bei Druck länger als `swap_geduldet_s` über `swap_geduldet_gb`), beendet sie den Dienst,
-der am weitesten über seiner Anmeldung liegt, sofort und hart, nachdem sie der Leitstelle die Sperre gemeldet hat. Kurze,
-kleine Auslagerung wird geduldet; wer im Rahmen seiner Anmeldung bleibt, wird nie beendet.
+`frei_mindestens_prozent`, kritischer Speicherdruck, aktives Auslagern schneller als `swap_zuwachs_gb_je_min` oder bei
+Druck länger als `swap_geduldet_s` laufend mehr als `swap_dauer_gb_je_min`, belegte Auslagerung über
+`swap_hoechstens_gb` nur bei Druck), beendet sie den Dienst, der am weitesten über seiner Anmeldung liegt, sofort und
+hart, nachdem sie der Leitstelle die Sperre gemeldet hat. Gezählt wird, was gerade ausgelagert wird (Zähler des Systems,
+wie vm_stat Swapouts), nicht der Bestand: macOS baut alte, ruhende Auslagerung nur langsam ab (HELF-149). Kurzes, wenig
+Auslagern wird geduldet; wer im Rahmen seiner Anmeldung bleibt, wird nie beendet.
 
 Danach ist der Dienst **gesperrt**, mit Grund und Zeit im Stand (übersteht Neustarts): kein Sollzustand, keine
 Absturzregel, kein Befehl der Leitstelle und keine Abhängigkeit startet ihn. Ein Auftrag, der gerade lief, endet bei der
@@ -223,9 +225,9 @@ Dienstdatei gehen vor.
 | `speicherschutz` | `faktor`, `zuschlag_gb` | 1,5, 4 | Grenze ohne `speicher_grenze_gb`: `speicher_gb` mal Faktor plus Zuschlag |
 | `speicherschutz` | `frei_mindestens_prozent`, `druck_kritisch` | 8, ja | darunter frei oder bei kritischem Druck gilt der Rechner als knapp |
 | `speicherschutz` | `ueberschuss_mindestens_gb` | 1 | bei knappem Rechner nur ein Dienst, der so weit über seiner Anmeldung liegt |
-| `speicherschutz` | `swap_hoechstens_gb` | 24 | mehr Auslagerung gilt als knapp (0: aus) |
-| `speicherschutz` | `swap_geduldet_gb`, `swap_geduldet_s`, `swap_dauer_nur_bei_druck` | 4, 300, ja | so viel Auslagerung höchstens so lange am Stück (nur bei Speicherdruck) |
-| `speicherschutz` | `swap_zuwachs_gb_je_min`, `swap_zuwachs_fenster_s` | 4, 60 | schneller wachsende Auslagerung gilt als knapp (0: aus) |
+| `speicherschutz` | `swap_hoechstens_gb` | 24 | mehr belegte Auslagerung gilt als knapp, nur bei Speicherdruck (0: aus) |
+| `speicherschutz` | `swap_dauer_gb_je_min`, `swap_geduldet_s`, `swap_dauer_nur_bei_druck` | 0,5, 300, ja | laufendes Auslagern über so viel GB je Minute höchstens so lange am Stück (nur bei Speicherdruck; 0: aus) |
+| `speicherschutz` | `swap_zuwachs_gb_je_min`, `swap_zuwachs_fenster_s` | 4, 60 | schnelleres Auslagern (GB je Minute) gilt sofort als knapp (0: aus) |
 | `speicherschutz` | `grenze_im_prozess`, `aufraeumen_anteil` | ja, 0,8 | Grenze auch in der Umgebung des Dienstes (siehe Speicherschutz) |
 | `schlaf` | `melden` | ja | auf dem Mac: beim Einschlafen der Leitstelle melden; Aufträge warten dann in den Apps, bis er wach ist |
 | `schlaf` | `leerlauf_aufschieben` | ja | solange die Leitstelle über diesen Rechner rechnen lässt, kein Schlaf nach Leerlauf; Deckel, Menü und Ein-Taste wirken weiter |

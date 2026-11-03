@@ -49,7 +49,7 @@ def ordner(tmp: Path, port: int) -> Ordner:
     (tmp / "dienst.py").write_text(DIENST)
     (tmp / "einstellungen.toml").write_text('[messung]\ntakt_s = 1\nmacmon = false\n[neustart]\npausen_s = [0.2]\n'
                                              '[speicherschutz]\ntakt_s = 0.2\nfaktor = 1.5\nzuschlag_gb = 0.2\nfrei_mindestens_prozent = 0\n'
-                                             'swap_hoechstens_gb = 0\nswap_zuwachs_gb_je_min = 0\nswap_geduldet_gb = 4096\n')
+                                             'swap_hoechstens_gb = 0\nswap_zuwachs_gb_je_min = 0\nswap_dauer_gb_je_min = 0\n')
     (tmp / "dienste" / "hoerer.toml").write_text("\n".join([
         'name = "Hörer"', f'ordner = "{tmp}"', f'befehl = ["{sys.executable}", "dienst.py", "{port}"]', f"port = {port}",
         'faehigkeiten = ["hoeren"]', "speicher_gb = 0.1", "startzeit_s = 15", "anhaltezeit_s = 5"]) + "\n")   # Grenze 0,35 GB
