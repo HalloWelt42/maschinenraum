@@ -11,6 +11,7 @@ export type Faehigkeit =
   | 'hoeren'
   | 'bild_beschreiben'
   | 'bild_erzeugen'
+  | 'bild_bearbeiten'
   | 'stimme'
   | 'stimme_klonen'
   | 'sprecher_erkennen'
@@ -203,29 +204,29 @@ export interface Speicherschutz {
    */
   ueberschuss_mindestens_gb: number;
   /**
-   * mehr Auslagerung gilt als knapp; 0 schaltet ab
-   */
-  swap_hoechstens_gb: number;
-  /**
-   * so viel Auslagerung wird geduldet ...
-   */
-  swap_geduldet_gb: number;
-  /**
-   * ... höchstens so lange am Stück (bei Speicherdruck)
-   */
-  swap_geduldet_s: number;
-  /**
-   * dauerhafte Auslagerung zählt nur, solange das System dabei Speicherdruck meldet (alte, ruhende Auslagerung baut macOS nur langsam ab)
-   */
-  swap_dauer_nur_bei_druck: boolean;
-  /**
-   * wächst die Auslagerung schneller, gilt der Rechner als knapp; 0 schaltet ab
+   * wird schneller ausgelagert (GB je Minute), gilt der Rechner als knapp; 0 schaltet ab
    */
   swap_zuwachs_gb_je_min: number;
   /**
-   * über diesen Zeitraum wird der Zuwachs gemessen
+   * über diesen Zeitraum wird das Auslagern gemessen
    */
   swap_zuwachs_fenster_s: number;
+  /**
+   * wird länger als swap_geduldet_s laufend mehr ausgelagert (GB je Minute), gilt der Rechner als knapp; 0 schaltet ab
+   */
+  swap_dauer_gb_je_min: number;
+  /**
+   * so lange wird laufendes Auslagern geduldet
+   */
+  swap_geduldet_s: number;
+  /**
+   * laufendes Auslagern zählt als dauerhaft nur, solange das System dabei Speicherdruck meldet
+   */
+  swap_dauer_nur_bei_druck: boolean;
+  /**
+   * mehr belegte Auslagerung gilt als knapp, aber nur, solange das System Speicherdruck meldet (ruhende Auslagerung baut macOS nur langsam ab); 0 schaltet ab
+   */
+  swap_hoechstens_gb: number;
   /**
    * jeder Dienst bekommt seine Grenze beim Start auch selbst: MASCHINENRAUM_SPEICHER_GRENZE_GB, für torch auf der Grafik PYTORCH_MPS_HIGH_WATERMARK_RATIO (Grenze je empfohlener Arbeitsmenge der Grafik) und PYTORCH_MPS_LOW_WATERMARK_RATIO; Einträge der Dienstdatei gehen vor; wirkt beim nächsten Start des Dienstes
    */

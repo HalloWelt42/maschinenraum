@@ -20,6 +20,7 @@ class Faehigkeit(str, Enum):
     HOEREN = "hoeren"
     BILD_BESCHREIBEN = "bild_beschreiben"
     BILD_ERZEUGEN = "bild_erzeugen"
+    BILD_BEARBEITEN = "bild_bearbeiten"   # leitet die Leitstelle aus dem Bild-Steckbrief ab; hier für das gemeinsame Protokoll
     STIMME = "stimme"
     STIMME_KLONEN = "stimme_klonen"
     SPRECHER_ERKENNEN = "sprecher_erkennen"
@@ -38,6 +39,7 @@ AUFGABE: dict[Faehigkeit, str] = {
     Faehigkeit.HOEREN: "Spracherkennung",
     Faehigkeit.BILD_BESCHREIBEN: "Bildbeschreibung",
     Faehigkeit.BILD_ERZEUGEN: "Bilderzeugung",
+    Faehigkeit.BILD_BEARBEITEN: "Bildbearbeitung",
     Faehigkeit.STIMME: "Sprachausgabe",
     Faehigkeit.STIMME_KLONEN: "Sprachausgabe",
     Faehigkeit.SPRECHER_ERKENNEN: "Spracherkennung",
