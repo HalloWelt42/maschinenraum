@@ -11,7 +11,7 @@ schluessel_orte:
   - "Mac: `~/Maschinenraum/schluessel`, Modus 0600: Schlüssel des Knotens bei der Leitstelle, zugleich Zugang der Durchleitung"
   - "Leitstelle: das Gegenstück unter Knoten (im Tresor der Leitstelle)"
 einrichten: einrichten.sh
-stand: 5067fb6
+stand: 0e119c2
 ---
 
 # Maschinenraum
@@ -46,7 +46,8 @@ schaltet nichts). In Kopfzeile und Tab-Titel heißt er "Maschinenraum · KI-Dien
 - Mac nach [[Grundlage Mac]]: Python ab 3.11, Node.js für die Oberfläche, Xcode für das Symbol in der Menüleiste
   (`swiftc`), macmon für Grafik, Temperatur und Leistung.
 - [[Leitstelle]]: dort unter Knoten der Mac mit "Maschinenraum verbinden"; der Maschinenraum braucht ihre Adresse und
-  den Schlüssel des Knotens.
+  den Schlüssel des Knotens. Über HTTPS (`wss://`) vertraut er den üblichen Stellen und der Hausstelle des Macs; eine
+  andere Zertifikatsstelle steht in `einstellungen.toml` unter `[leitstelle]` als `ca_datei`.
 - Die Modellablage `~/Maschinenraum/modelle` (siehe [[Grundlage Mac]]); jeder Dienst bekommt sie als
   `MASCHINENRAUM_MODELLE` und `HF_HUB_CACHE`.
 

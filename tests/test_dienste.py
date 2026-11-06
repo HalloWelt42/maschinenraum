@@ -111,6 +111,19 @@ def test_kanaladresse():
     assert Leitstelle().kanal is None
 
 
+def test_wss_vertraut_der_eingestellten_zertifikatsstelle(tmp_path, monkeypatch):
+    import certifi
+    assert Leitstelle(adresse="http://leitstelle:8530").tls_kontext() is None
+    gezaehlt = len(Leitstelle(adresse="https://leitstelle:8531", ca_datei=certifi.where()).tls_kontext().get_ca_certs())
+    assert gezaehlt > 0
+    # ohne Einstellung die Hausstelle dieses Rechners ($CAROOT geht vor)
+    monkeypatch.setenv("CAROOT", str(tmp_path))
+    (tmp_path / "rootCA.pem").write_text(Path(certifi.where()).read_text())
+    assert Leitstelle(adresse="https://leitstelle:8531").tls_kontext() is not None
+    with pytest.raises(OSError):
+        Leitstelle(adresse="https://leitstelle:8531", ca_datei=str(tmp_path / "fehlt.pem")).tls_kontext()
+
+
 def test_swap_auch_mit_dezimalkomma():
     assert swap_mac("total = 18432.00M  used = 17117.56M  free = 1314.44M  (encrypted)") == (17117.56 / 1024, 18.0)
     assert swap_mac("total = 18432,00M  used = 17117,56M  free = 1314,44M  (encrypted)") == (17117.56 / 1024, 18.0)

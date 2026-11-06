@@ -286,7 +286,8 @@ class Leitstellenkanal:
 
     async def _verbunden(self, kanal: str) -> None:
         kopf = {"Authorization": f"Bearer {self.ordner.schluessel() or ''}"}
-        async with websockets.connect(kanal, additional_headers=kopf, open_timeout=10, ping_interval=20) as ws:
+        tls = self.ordner.einstellungen().leitstelle.tls_kontext()
+        async with websockets.connect(kanal, additional_headers=kopf, open_timeout=10, ping_interval=20, ssl=tls) as ws:
             if not self._wach.is_set():
                 return                                       # während des Verbindens eingeschlafen
             await ws.send(_umschlag("knoten.anmelden", await asyncio.to_thread(self.anmeldung)))

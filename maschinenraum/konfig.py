@@ -19,10 +19,12 @@ verwaltet das Stellwerk.
 from __future__ import annotations
 
 import os
+import ssl
 import tomllib
 from pathlib import Path
 from typing import Any
 
+import certifi
 from dienstkern.speicherwache import Speicherschutz as Kernschutz
 from dienstkern.verwalter import Neustartregeln
 from dienstkern.vorlage import Ladefehler, Vorlage, dateien_lesen
@@ -48,9 +50,31 @@ class Durchleitung(BaseModel):
     port: int = Field(default=8541, ge=1, le=65535)
 
 
+def hausstelle() -> Path | None:
+    """Wurzelzertifikat der Hausstelle dieses Rechners (die lokale Zertifikatsstelle, von der die Apps im Heimnetz ihre
+    HTTPS-Zertifikate haben), wenn es eines gibt: `$CAROOT`, sonst der übliche Ort auf Mac und Linux."""
+    orte = [Path(os.environ["CAROOT"]) / "rootCA.pem"] if os.environ.get("CAROOT") else []
+    orte += [Path.home() / "Library" / "Application Support" / "mkcert" / "rootCA.pem",
+             Path.home() / ".local" / "share" / "mkcert" / "rootCA.pem"]
+    return next((o for o in orte if o.is_file()), None)
+
+
 class Leitstelle(BaseModel):
     adresse: str | None = Field(default=None, description="Basisadresse der Leitstelle, zum Beispiel http://leitstelle:8530; leer: ohne Leitstelle")
     wiederverbindung_max_s: float = Field(default=30, ge=1, description="längste Pause zwischen Verbindungsversuchen")
+    ca_datei: str | None = Field(default=None, description="Pfad zur Datei einer eigenen Zertifikatsstelle (rootCA.pem) für die "
+                                 "Leitstelle über HTTPS; leer: die üblichen Stellen und die Hausstelle dieses Rechners, wenn es eine gibt")
+
+    def tls_kontext(self) -> ssl.SSLContext | None:
+        """Prüfung für wss://: die üblichen Stellen und dazu die eingestellte Zertifikatsstelle, sonst die Hausstelle dieses
+        Rechners (von ihr hat die Leitstelle im Heimnetz ihr Zertifikat). Für ws:// keiner."""
+        if not (self.kanal or "").startswith("wss://"):
+            return None
+        kontext = ssl.create_default_context(cafile=certifi.where())
+        zusatz = Path(self.ca_datei).expanduser() if self.ca_datei else hausstelle()
+        if zusatz is not None:
+            kontext.load_verify_locations(zusatz)
+        return kontext
 
     @property
     def kanal(self) -> str | None:
