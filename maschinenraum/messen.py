@@ -22,6 +22,7 @@ from pathlib import Path
 
 from dienstkern.messen import GIB, MAC, befehl
 
+from .akku import Akkumesser
 from .protokoll import Messwerte
 
 TEMPERATUR_PLAUSIBEL = (15.0, 120.0)            # °C; außerhalb ist es ein Messfehler des Sensors
@@ -91,9 +92,11 @@ def _speicher_linux() -> tuple[float, float, float | None, float | None]:
     return m["MemTotal"] / GIB, (m["MemTotal"] - m["MemAvailable"]) / GIB, (swap_gesamt - m.get("SwapFree", 0)) / GIB, swap_gesamt / GIB
 
 
-def platte_frei_gb() -> float:
+def platte_gb() -> tuple[float, float]:
+    """Frei und gesamt auf der Datenplatte (auf dem Mac der Datenbereich, sonst die Wurzel)."""
     wurzel = "/System/Volumes/Data" if MAC and os.path.isdir("/System/Volumes/Data") else "/"
-    return shutil.disk_usage(wurzel).free / GIB
+    belegung = shutil.disk_usage(wurzel)
+    return belegung.free / GIB, belegung.total / GIB
 
 
 def temperatur_linux() -> float | None:
@@ -180,14 +183,15 @@ class Macmon:
 
 
 class Messer:
-    def __init__(self, takt_s: float, macmon: bool) -> None:
+    def __init__(self, takt_s: float, macmon: bool, akku: Akkumesser | None = None) -> None:
         self.macmon = Macmon(takt_s) if macmon and Macmon.vorhanden() else None
+        self.akku = akku if akku is not None else Akkumesser()
         self.cpu = None if MAC else CpuLinux()
         if self.macmon:
             self.macmon.starten()
 
     def messwege(self) -> list[str]:
-        wege = ["speicher", "swap", "platte", "last"]
+        wege = ["speicher", "swap", "platte", "last"] + (["akku"] if self.akku.vorhanden else [])
         if self.cpu:
             wege += ["cpu", "temperatur"]
         if self.macmon:
@@ -196,10 +200,12 @@ class Messer:
 
     def messen(self) -> Messwerte:
         gesamt, belegt, swap, swap_gesamt = speicher()
+        frei, platte = platte_gb()
         werte = Messwerte(speicher_gesamt_gb=round(gesamt, 2), speicher_belegt_gb=round(belegt, 2),
                           swap_belegt_gb=round(swap, 2) if swap is not None else None,
                           swap_gesamt_gb=round(swap_gesamt, 2) if swap_gesamt is not None else None,
-                          last_1m=round(os.getloadavg()[0], 2), platte_frei_gb=round(platte_frei_gb(), 1))
+                          last_1m=round(os.getloadavg()[0], 2), platte_frei_gb=round(frei, 1), platte_gesamt_gb=round(platte, 1),
+                          akku=self.akku.messen())
         if self.cpu:
             werte.cpu_prozent, werte.temperatur_c = self.cpu.messen(), temperatur_linux()
         if self.macmon:

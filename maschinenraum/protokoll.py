@@ -80,6 +80,17 @@ class KnotenAnmeldung(BaseModel):
     durchleitung_port: int | None = None    # Port, über den die Leitstelle Anfragen an die Dienste durchreicht
 
 
+class Akku(BaseModel):
+    """Akku eines tragbaren Rechners (in `knoten.messwerte`); fehlt bei Rechnern ohne Akku. Fehlende Angaben sind None."""
+
+    prozent: int                                  # Ladestand 0 bis 100
+    netzteil: bool                                # hängt am Netzteil
+    laedt: bool                                   # lädt gerade (am Netzteil ohne Laden: voll oder Akku-Schonung)
+    rest_min: int | None = None                   # bis voll (lädt) oder bis leer (ohne Netzteil); None: unbekannt
+    kapazitaet_prozent: float | None = None       # Zustand: heutige volle Kapazität in Prozent der ursprünglichen
+    zyklen: int | None = None                     # Ladezyklen
+
+
 class Messwerte(BaseModel):
     """`knoten.messwerte`: im Takt des Agenten."""
 
@@ -90,9 +101,11 @@ class Messwerte(BaseModel):
     cpu_prozent: float | None = None
     last_1m: float | None = None
     platte_frei_gb: float | None = None
+    platte_gesamt_gb: float | None = None
     grafik_prozent: float | None = None
     temperatur_c: float | None = None
     leistung_w: float | None = None
+    akku: Akku | None = None                      # nur Rechner mit Akku
 
 
 class Prozesszustand(str, Enum):

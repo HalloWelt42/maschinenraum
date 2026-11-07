@@ -333,8 +333,10 @@ So kann keine fremde Webseite im selben Browser Dienste schalten.
 ## Was gemessen wird
 
 Speicher auf dem Mac: belegt = (anonyme Seiten - löschbare + fest verdrahtete + Kompressor) mal Seitengröße;
-das entspricht den Systemanzeigen. Auf Linux: Gesamt minus verfügbar. Dazu Swap, freie Platte, Last; auf Linux
-Prozessorlast und Temperatur, auf dem Mac mit macmon Prozessor, Grafik, Temperatur und Leistung. Je Dienst
+das entspricht den Systemanzeigen. Auf Linux: Gesamt minus verfügbar. Dazu Swap, Platte (frei und gesamt), Last; auf Linux
+Prozessorlast und Temperatur, auf dem Mac mit macmon Prozessor, Grafik, Temperatur und Leistung. Auf einem Mac mit Akku
+dazu der Akku (Ladestand, Netzteil, Laden, Restzeit, Zustand, Ladezyklen) aus `ioreg -rn AppleSmartBattery`, höchstens
+alle 30 Sekunden gefragt. Je Dienst
 der Speicher seiner Prozesse (Mac: physischer Fußabdruck, Linux: PSS).
 
 ## Entwickeln
