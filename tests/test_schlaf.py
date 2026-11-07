@@ -187,7 +187,7 @@ class ScheinMesser:
         return Messwerte(speicher_gesamt_gb=64.0, speicher_belegt_gb=20.0)
 
 
-async def mit_kanal(tmp_path: Path, leitstelle: ScheinLeitstelle):
+async def mit_kanal(tmp_path: Path, leitstelle: ScheinLeitstelle, wach_pruefen=lambda: True):
     server = await websockets.serve(leitstelle, "127.0.0.1", 0)
     port = server.sockets[0].getsockname()[1]
     (tmp_path / "dienste").mkdir()
@@ -195,7 +195,7 @@ async def mit_kanal(tmp_path: Path, leitstelle: ScheinLeitstelle):
                                                  '[messung]\ntakt_s = 1\nmacmon = false\n')
     o = Ordner(tmp_path)
     o.schluessel_speichern("ms_probe")
-    kanal = Leitstellenkanal(o, Verwalter(o, o.einstellungen()), ScheinMesser())
+    kanal = Leitstellenkanal(o, Verwalter(o, o.einstellungen()), ScheinMesser(), wach_pruefen=wach_pruefen)
     kanal.starten()
     return server, kanal
 
@@ -250,6 +250,26 @@ async def test_waechter_gilt_nach_der_wachzeit_als_wach(tmp_path: Path, monkeypa
         await warte_bis(lambda: kanal.stand.zustand == Verbindung.VERBUNDEN)
         await kanal.einschlafen(Schlafgrund.LEERLAUF)
         await warte_bis(lambda: ls.anmeldungen == 2 and kanal.stand.zustand == Verbindung.VERBUNDEN, 4)
+    finally:
+        await kanal.beenden()
+        server.close()
+
+
+async def test_waechter_verbindet_im_halbschlaf_nicht(tmp_path: Path, monkeypatch):
+    """HELF-183: Deckel zu, kurz ohne Bildschirm erwacht. Die Wachzeit läuft ab, aber der Rechner ist nicht ganz wach:
+    keine neue Anmeldung (aus dem Halbschlaf schläft macOS ohne Meldung wieder ein). Erst ganz wach verbindet er."""
+    monkeypatch.setattr(kanal_modul, "WACHZEIT_S", 0.3)
+    monkeypatch.setattr(kanal_modul, "WACHPRUEFUNG_S", 0.2)
+    ganz_wach = False
+    ls = ScheinLeitstelle()
+    server, kanal = await mit_kanal(tmp_path, ls, wach_pruefen=lambda: ganz_wach)
+    try:
+        await warte_bis(lambda: kanal.stand.zustand == Verbindung.VERBUNDEN)
+        await kanal.einschlafen(Schlafgrund.ANGEFORDERT)
+        await asyncio.sleep(1.2)                      # Wachzeit vorbei, mehrere Prüfungen im Halbschlaf
+        assert ls.anmeldungen == 1 and kanal.stand.zustand == Verbindung.SCHLAEFT
+        ganz_wach = True                              # Deckel auf, ohne Weckmeldung
+        await warte_bis(lambda: ls.anmeldungen == 2 and kanal.stand.zustand == Verbindung.VERBUNDEN, 3)
     finally:
         await kanal.beenden()
         server.close()

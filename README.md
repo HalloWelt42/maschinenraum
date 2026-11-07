@@ -238,7 +238,9 @@ Der Maschinenraum erkennt selbst, wann der Mac einschläft und aufwacht (Energie
 Menüleiste). Vor dem Einschlafen meldet er der Leitstelle `knoten.schlaeft` und schließt die Verbindung; die Leitstelle
 lässt Aufträge dann nicht scheitern, sondern sagt den Apps, dass sie warten sollen, bis er wach ist. Nach dem Aufwachen
 verbindet er sich sofort neu (bei einem kurzen Erwachen ohne Bildschirm, Power Nap, nicht). Kommt keine Weckmeldung,
-gilt er nach zwei Minuten Wachzeit als wach. Schlaf nach Leerlauf schiebt er auf, solange eine Anfrage der Leitstelle
+gilt er nach zwei Minuten Wachzeit als wach, aber erst, wenn er ganz wach ist (mit Bildschirm); im Halbschlaf bei
+zugeklapptem Deckel fragt er alle zehn Sekunden neu. Aus dem Halbschlaf schläft macOS ohne Meldung wieder ein, eine dort
+aufgebaute Verbindung risse unbemerkt ab. Schlaf nach Leerlauf schiebt er auf, solange eine Anfrage der Leitstelle
 durch ihn läuft (Einstellung `schlaf.leerlauf_aufschieben`).
 
 ## Nur über die Leitstelle

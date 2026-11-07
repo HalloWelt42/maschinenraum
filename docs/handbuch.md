@@ -105,7 +105,13 @@ dauert aber Stunden. Zurückspielen: den Ordner an seinen Ort legen (Modus 700, 
 - Ein Dienst startet nicht: unter Dienste die Ladefehler und das Protokoll des Dienstes ansehen
   (`~/Maschinenraum/protokolle/<dienst>.log`); fehlt ein Modell, steht das dort.
 - Die Leitstelle sieht den Mac nicht: Adresse oder Schlüssel unter Leitstelle falsch, oder der Mac schläft (der
-  Maschinenraum meldet das Einschlafen; Aufträge warten dann in den Apps).
+  Maschinenraum meldet das Einschlafen; Aufträge warten dann in den Apps). Ein zugeklapptes MacBook schläft auch mit
+  der Einstellung "nie in den Ruhezustand"; soll es zugeklappt rechnen: `sudo pmset -a disablesleep 1`
+  (zurück mit `sudo pmset -a disablesleep 0`).
+- Ein Mac unter macOS 26 oder neuer erreicht die Leitstelle nicht (`[Errno 65] No route to host` im Protokoll), obwohl
+  "Lokales Netzwerk" erlaubt ist: Homebrew-Python ist ad hoc signiert und passt nicht zur Freigabe. Neu signieren mit
+  `codesign --force --sign - --identifier org.python.python <Python.app von python@3.13 im Homebrew-Keller>`, dann
+  `launchctl kickstart -k gui/$(id -u)/maschinenraum`; nach jedem `brew upgrade python@3.13` wiederholen.
 - Nach einer Installation reagiert nichts: `launchctl print gui/$(id -u)/maschinenraum` und
   `~/Maschinenraum/protokolle/start.log` ansehen.
 - Das Symbol fehlt in der Menüleiste: `swiftc` fehlte bei der Installation (Xcode), dann erneut installieren.

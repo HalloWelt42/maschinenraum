@@ -15,7 +15,10 @@ Schlaf (schlaf.py meldet ihn): vor dem Einschlafen `knoten.schlaeft`, höchstens
 `knoten.schlaf_vermerkt` warten (eine ältere Leitstelle antwortet nie), dann mit dem Grund `schlaeft` schließen. Bis zum
 Aufwachen ruht die Verbindung; danach sofort neu, eine noch offen scheinende Verbindung wird geschlossen. Ein Wächter
 hält es für aufgewacht, wenn `WACHZEIT_S` Wachzeit ohne Weckmeldung vergehen (time.monotonic zählt auf dem Mac den
-Schlaf nicht mit).
+Schlaf nicht mit) und der Rechner ganz wach ist (mit Bildschirm). Im Halbschlaf (Deckel zu, Wartung, Power Nap) läuft die
+Wachzeit weiter, aber aus ihm schläft macOS ohne `kIOMessageSystemWillSleep` wieder ein: eine dort aufgebaute
+Verbindung riss ohne Schlafmeldung ab, und die Leitstelle sah einen verschwundenen statt eines schlafenden Rechners
+(HELF-183). Darum prüft der Wächter danach alle `WACHPRUEFUNG_S`, bis der Rechner ganz wach ist.
 """
 
 from __future__ import annotations
@@ -44,12 +47,14 @@ from .laeuferlast import Laeuferaufsicht, Lastmesser
 from .messen import Messer
 from .protokoll import Befehl, Befehlsart, Fremdzugriffe, KnotenAnmeldung, KnotenLast, KnotenSchlaeft, Schlafgrund
 from .prozesse import Verwalter
+from .schlaf import voll_wach
 
 log = logging.getLogger("maschinenraum")
 PROTOKOLL = "leitstelle/1"
 DIENSTLISTE_SPAETESTENS = 10                     # Takte
 VERMERK_S = 3.0                                  # so lange wartet das Einschlafen auf knoten.schlaf_vermerkt
 WACHZEIT_S = 120.0                               # Wächter: so viel Wachzeit ohne Weckmeldung, dann gilt der Rechner als wach
+WACHPRUEFUNG_S = 10.0                            # Wächter im Halbschlaf: so oft fragen, ob der Rechner ganz wach ist
 
 
 class Verbindung(str, Enum):
@@ -115,8 +120,10 @@ Senden = Callable[[str], Awaitable[None]]
 
 
 class Leitstellenkanal:
-    def __init__(self, ordner: Ordner, verwalter: Verwalter, messer: Messer) -> None:
+    def __init__(self, ordner: Ordner, verwalter: Verwalter, messer: Messer, wach_pruefen: Callable[[], bool] = voll_wach) -> None:
+        """`wach_pruefen` sagt, ob der Rechner ganz wach ist (Vorgabe: `schlaf.voll_wach`, auf anderen Systemen immer ja)."""
         self.ordner, self.verwalter, self.messer = ordner, verwalter, messer
+        self._wach_pruefen = wach_pruefen
         self.beobachter = Beobachter(lambda: self.verwalter.einstellungen, lambda: self.verwalter.dienste.values())
         self.laeuferaufsicht = Laeuferaufsicht(self.beobachter)
         self.stand = LeitstellenStand(adresse=None, zustand=Verbindung.AUS)
@@ -216,11 +223,19 @@ class Leitstellenkanal:
 
     async def _wachzeit(self) -> None:
         """Wächter: kommt keine Weckmeldung (verpasst, oder nur kurz erwacht und nicht wieder eingeschlafen), gilt der
-        Rechner nach `WACHZEIT_S` Wachzeit als wach. asyncio misst mit time.monotonic, das während des Schlafs ruht."""
+        Rechner nach `WACHZEIT_S` Wachzeit als wach, sobald er ganz wach ist; im Halbschlaf wird nicht verbunden, sondern
+        alle `WACHPRUEFUNG_S` neu gefragt. asyncio misst mit time.monotonic, das während des Schlafs ruht."""
         await asyncio.sleep(WACHZEIT_S)
-        if not self._wach.is_set():
-            log.info("Leitstelle: keine Weckmeldung nach %.0f s Wachzeit; verbinde neu", WACHZEIT_S)
-            self.aufwachen()
+        gemeldet = False
+        while not self._wach.is_set():
+            if await asyncio.to_thread(self._wach_pruefen):
+                log.info("Leitstelle: keine Weckmeldung nach %.0f s Wachzeit, der Rechner ist ganz wach; verbinde neu", WACHZEIT_S)
+                self.aufwachen()
+                return
+            if not gemeldet:
+                log.info("Leitstelle: Rechner im Halbschlaf (ohne Bildschirm); verbinde erst, wenn er ganz wach ist")
+                gemeldet = True
+            await asyncio.sleep(WACHPRUEFUNG_S)
 
     # ── Verbindung ───────────────────────────────────────────────────────
     def anmeldung(self) -> KnotenAnmeldung:
