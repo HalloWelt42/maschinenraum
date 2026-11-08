@@ -17,6 +17,7 @@ class Faehigkeit(str, Enum):
     TEXT = "text"
     EINBETTUNG = "einbettung"
     UEBERSETZEN = "uebersetzen"
+    EINORDNEN = "einordnen"           # feste Möglichkeiten nach Wahrscheinlichkeit (LS-26); hier für das gemeinsame Protokoll
     HOEREN = "hoeren"
     BILD_BESCHREIBEN = "bild_beschreiben"
     BILD_ERZEUGEN = "bild_erzeugen"
