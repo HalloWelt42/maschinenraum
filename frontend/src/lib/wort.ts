@@ -5,6 +5,7 @@ export const FAEHIGKEIT: Record<Faehigkeit, { wort: string; symbol: string; klas
   text: { wort: 'Text', symbol: 'fa-comment-dots', klasse: 'text', farbe: 'var(--mr-himmel)' },
   einbettung: { wort: 'Einbettung', symbol: 'fa-diagram-project', klasse: 'einbettung', farbe: 'var(--mr-petrol)' },
   uebersetzen: { wort: 'Übersetzen', symbol: 'fa-language', klasse: 'uebersetzen', farbe: 'var(--mr-tuerkis)' },
+  einordnen: { wort: 'Einordnen', symbol: 'fa-tags', klasse: 'text', farbe: 'var(--mr-himmel)' },
   hoeren: { wort: 'Hören', symbol: 'fa-ear-listen', klasse: 'hoeren', farbe: 'var(--mr-minze)' },
   bild_beschreiben: { wort: 'Bild beschreiben', symbol: 'fa-image', klasse: 'bild', farbe: 'var(--mr-flieder)' },
   bild_erzeugen: { wort: 'Bild erzeugen', symbol: 'fa-palette', klasse: 'bild', farbe: 'var(--mr-flieder)' },

@@ -8,6 +8,7 @@ export type Faehigkeit =
   | 'text'
   | 'einbettung'
   | 'uebersetzen'
+  | 'einordnen'
   | 'hoeren'
   | 'bild_beschreiben'
   | 'bild_erzeugen'
@@ -113,6 +114,10 @@ export interface Leitstelle {
    * längste Pause zwischen Verbindungsversuchen
    */
   wiederverbindung_max_s: number;
+  /**
+   * Pfad zur Datei einer eigenen Zertifikatsstelle (rootCA.pem) für die Leitstelle über HTTPS; leer: die üblichen Stellen und die Hausstelle dieses Rechners, wenn es eine gibt
+   */
+  ca_datei: string | null;
 }
 /**
  * Weg der Leitstelle zu den Diensten (wie bei einem Modell-Läufer); nur mit dem Schlüssel nutzbar.
@@ -325,9 +330,25 @@ export interface Messwerte {
   cpu_prozent: number | null;
   last_1m: number | null;
   platte_frei_gb: number | null;
+  platte_gesamt_gb: number | null;
   grafik_prozent: number | null;
   temperatur_c: number | null;
   leistung_w: number | null;
+  akku: Akku | null;
+}
+/**
+ * Akku eines tragbaren Rechners (in `knoten.messwerte`); fehlt bei Rechnern ohne Akku. Fehlende Angaben sind None.
+ *
+ * This interface was referenced by `Maschinenraum`'s JSON-Schema
+ * via the `definition` "Akku".
+ */
+export interface Akku {
+  prozent: number;
+  netzteil: boolean;
+  laedt: boolean;
+  rest_min: number | null;
+  kapazitaet_prozent: number | null;
+  zyklen: number | null;
 }
 /**
  * This interface was referenced by `Maschinenraum`'s JSON-Schema
