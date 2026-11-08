@@ -11,7 +11,7 @@ schluessel_orte:
   - "Mac: `~/Maschinenraum/schluessel`, Modus 0600: Schlüssel des Knotens bei der Leitstelle, zugleich Zugang der Durchleitung"
   - "Leitstelle: das Gegenstück unter Knoten (im Tresor der Leitstelle)"
 einrichten: einrichten.sh
-stand: 0e119c2
+stand: b8d0798
 ---
 
 # Maschinenraum
@@ -109,9 +109,10 @@ dauert aber Stunden. Zurückspielen: den Ordner an seinen Ort legen (Modus 700, 
   der Einstellung "nie in den Ruhezustand"; soll es zugeklappt rechnen: `sudo pmset -a disablesleep 1`
   (zurück mit `sudo pmset -a disablesleep 0`).
 - Ein Mac unter macOS 26 oder neuer erreicht die Leitstelle nicht (`[Errno 65] No route to host` im Protokoll), obwohl
-  "Lokales Netzwerk" erlaubt ist: Homebrew-Python ist ad hoc signiert und passt nicht zur Freigabe. Neu signieren mit
-  `codesign --force --sign - --identifier org.python.python <Python.app von python@3.13 im Homebrew-Keller>`, dann
-  `launchctl kickstart -k gui/$(id -u)/maschinenraum`; nach jedem `brew upgrade python@3.13` wiederholen.
+  "Lokales Netzwerk" erlaubt ist: Homebrew-Python ist ad hoc signiert und passt nicht zur Freigabe. Die Installation
+  signiert Python.app ab macOS 26 selbst fest als `org.python.python`; nach einem `brew upgrade python@3.13` also
+  einfach `./installieren.sh` erneut ausführen. Von Hand: `codesign --force --sign - --identifier org.python.python
+  <Python.app von python@3.13 im Homebrew-Keller>`, dann `launchctl kickstart -k gui/$(id -u)/maschinenraum`.
 - Nach einer Installation reagiert nichts: `launchctl print gui/$(id -u)/maschinenraum` und
   `~/Maschinenraum/protokolle/start.log` ansehen.
 - Das Symbol fehlt in der Menüleiste: `swiftc` fehlte bei der Installation (Xcode), dann erneut installieren.

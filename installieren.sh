@@ -78,8 +78,25 @@ launchd_laden() {   # Abmelden läuft im Hintergrund weiter; erst neu laden, wen
   launchctl bootstrap "gui/$(id -u)" "$2"
 }
 
+# ab macOS 26 bindet die Freigabe "Lokales Netzwerk" an die Kennung der Signatur. Homebrew-Python ist ad hoc mit
+# zufälliger Kennung signiert, die Freigabe greift dann nicht ([Errno 65] No route to host zur Leitstelle). Fest auf
+# org.python.python signieren; nach einem brew upgrade von Python einfach erneut installieren (MR-2)
+python_app_signieren() {
+  [ "$(sw_vers -productVersion | cut -d. -f1)" -ge 26 ] || return 0
+  APP="$("$PY" -c 'import sys; print(sys.base_prefix)')/Resources/Python.app"
+  if [ ! -d "$APP" ]; then
+    meldung "Hinweis: Python.app nicht gefunden ($APP); bei [Errno 65] im Protokoll siehe Handbuch."
+    return 0
+  fi
+  [ "$(codesign -dv "$APP" 2>&1 | sed -n 's/^Identifier=//p')" = org.python.python ] && return 0
+  codesign --force --sign - --identifier org.python.python "$APP" \
+    && meldung "Python.app neu signiert (org.python.python), damit die Freigabe Lokales Netzwerk greift." \
+    || meldung "Hinweis: Python.app ließ sich nicht neu signieren; siehe Handbuch, Wenn etwas klemmt."
+}
+
 case "$(uname -s)" in
   Darwin)
+    python_app_signieren
     mkdir -p "$HOME/Library/LaunchAgents"
     PLIST="$HOME/Library/LaunchAgents/$KENNUNG.plist"
     cat > "$PLIST" <<EOF
