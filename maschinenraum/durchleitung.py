@@ -11,7 +11,9 @@ Abbruch reicht durch: schließt die Leitstelle ihre Verbindung, schließt die Du
 der Dienst noch rechnet und noch nichts geantwortet hat (ein Bilddienst antwortet erst mit dem fertigen Bild). Der Dienst
 sieht das und hört auf; vorher rechnete er bis zum Ende weiter und hielt die Grafik fest.
 
-Den Modell-Läufer des Rechners spricht die Leitstelle direkt an; durch den Maschinenraum gehen nur seine Dienste.
+Auch den Modell-Läufer des Rechners (`nachbar.modell_laeufer`) erreicht die Leitstelle nur hier, unter dem reservierten
+Namen `_laeufer` (HELF-166, Entscheidung des Nutzers: ein Weg je Rechner); der Läufer lauscht dann nur am Rechner selbst.
+Mit dem Zertifikat der Hausstelle im Ordner `zertifikate` spricht die Durchleitung TLS (siehe `__main__`).
 """
 
 from __future__ import annotations
@@ -32,6 +34,8 @@ from starlette.requests import ClientDisconnect
 from . import __version__
 
 log = logging.getLogger("maschinenraum")
+#: Name des Modell-Läufers in der Durchleitung; Dienste heißen nie so (Kennungen beginnen mit einem Buchstaben)
+LAEUFER = "_laeufer"
 # Köpfe, die nur für eine Verbindung gelten oder die die Durchleitung selbst setzt
 OHNE_KOPF = {"host", "authorization", "content-length", "connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade",
              "proxy-authorization", "proxy-connection"}
@@ -105,6 +109,11 @@ def erstellen(laufzeit) -> FastAPI:
         return {"maschinenraum": __version__, "dienste": [d.kennung for d in laufzeit.verwalter.dienste.values()]}
 
     def ziel_des_dienstes(dienst: str) -> tuple[str, str] | JSONResponse:
+        if dienst == LAEUFER:
+            adresse = laufzeit.ordner.einstellungen().nachbar.modell_laeufer
+            if not adresse:
+                return _absage(404, "unbekannt", "Auf diesem Rechner ist kein Modell-Läufer eingetragen (nachbar.modell_laeufer).")
+            return adresse.rstrip("/"), "Modell-Läufer"
         d = laufzeit.verwalter.dienste.get(dienst)
         if d is None:
             return _absage(404, "unbekannt", f"Diesen Dienst gibt es hier für die Leitstelle nicht: {dienst}")

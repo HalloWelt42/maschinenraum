@@ -244,7 +244,8 @@ class Leitstellenkanal:
         e = self.ordner.einstellungen()
         name = e.name or socket.gethostname().removesuffix(".local")
         return KnotenAnmeldung(name=name, betriebssystem=system, architektur=platform.machine(), speicher_gb=gesamt,
-                               agent_version=__version__, messwege=self.messer.messwege(), durchleitung_port=e.durchleitung.port)
+                               agent_version=__version__, messwege=self.messer.messwege(), durchleitung_port=e.durchleitung.port,
+                               durchleitung_tls=self.ordner.durchleitung_tls() is not None)
 
     async def _schleife(self, kanal: str, pause_max: float) -> None:
         self._pause_s = 1.0

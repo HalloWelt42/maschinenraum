@@ -32,8 +32,14 @@ def laufen(ordner: Ordner) -> None:
     e = ordner.einstellungen()
     app = erstellen(ordner)
     weg = durchleitung.erstellen(app.state.laufzeit)
+    # im Heimnetz nur TLS (HELF-166): mit dem Zertifikat der Hausstelle aus dem Ordner zertifikate
+    tls = ordner.durchleitung_tls()
+    if tls is None:
+        logging.getLogger("maschinenraum").warning("Durchleitung ohne TLS: im Ordner %s fehlt das Zertifikat (tools/zertifikat.sh)", ordner.zertifikate)
+    zusatz = {"ssl_certfile": str(tls[0]), "ssl_keyfile": str(tls[1])} if tls else {}
     asyncio.run(_beide(uvicorn.Server(uvicorn.Config(app, host=e.oberflaeche.adresse, port=e.oberflaeche.port, log_level="warning", access_log=False)),
-                       uvicorn.Server(uvicorn.Config(weg, host=e.durchleitung.adresse, port=e.durchleitung.port, log_level="warning", access_log=False))))
+                       uvicorn.Server(uvicorn.Config(weg, host=e.durchleitung.adresse, port=e.durchleitung.port, log_level="warning", access_log=False,
+                                                     **zusatz))))
 
 
 async def liste(ordner: Ordner) -> None:

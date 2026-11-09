@@ -44,7 +44,9 @@ class Oberflaeche(BaseModel):
 
 
 class Durchleitung(BaseModel):
-    """Weg der Leitstelle zu den Diensten (wie bei einem Modell-Läufer); nur mit dem Schlüssel nutzbar."""
+    """Weg der Leitstelle zu den Diensten und zum Modell-Läufer; nur mit dem Schlüssel nutzbar. Liegt im Ordner
+    `zertifikate` ein Zertifikat der Hausstelle (`durchleitung.pem` und `durchleitung-schluessel.pem`, tools/zertifikat.sh),
+    spricht sie TLS (HELF-166)."""
 
     adresse: str = Field(default="0.0.0.0", description="im Netz erreichbar, damit die Leitstelle Anfragen durchreichen kann")
     port: int = Field(default=8541, ge=1, le=65535)
@@ -297,6 +299,15 @@ class Ordner:
     @property
     def schluesseldatei(self) -> Path:
         return self.wurzel / "schluessel"
+
+    @property
+    def zertifikate(self) -> Path:
+        return self.wurzel / "zertifikate"
+
+    def durchleitung_tls(self) -> tuple[Path, Path] | None:
+        """Zertifikat und Schlüssel der Durchleitung (aus der Hausstelle, tools/zertifikat.sh), wenn beide da sind."""
+        pem, schluessel = self.zertifikate / "durchleitung.pem", self.zertifikate / "durchleitung-schluessel.pem"
+        return (pem, schluessel) if pem.is_file() and schluessel.is_file() else None
 
     def anlegen(self) -> None:
         for o in (self.wurzel, self.dienste_ordner, self.protokolle, self.betrieb_ordner, self.modelle):

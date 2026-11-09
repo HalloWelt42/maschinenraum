@@ -210,7 +210,7 @@ Dienstdatei gehen vor.
 | `neustart` | `pausen_s` | 5, 30, 120 | Pausen vor dem ersten, zweiten, dritten Neustart nach Absturz |
 | `neustart` | `fenster_s`, `im_fenster` | 600, 3 | mehr Abstürze im Zeitraum: der Dienst bleibt aus |
 | `leitstelle` | `adresse` | keine | Basisadresse einer Leitstelle; den Schlüssel trägt man in der Oberfläche ein |
-| `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten, nur mit Schlüssel |
+| `durchleitung` | `adresse`, `port` | 0.0.0.0, 8541 | Weg der Leitstelle zu den Diensten und zum Läufer, nur mit Schlüssel; TLS, wenn `zertifikate/durchleitung.pem` und `durchleitung-schluessel.pem` da sind (tools/zertifikat.sh) |
 | `nachbar` | `modell_laeufer` | http://127.0.0.1:1234 | Modell-Läufer auf diesem Rechner: angezeigt und beobachtet (Zugriffe am Leitstand vorbei, Last seiner Prozesse) |
 | `nachbar` | `stellwerk` | http://127.0.0.1:8550 | Stellwerk auf diesem Rechner: im Takt der Beobachtung gelesen (nur lesend); Prozesse seiner Apps zählen weder als fremder Speicher noch als Fremdlast, ihre Last geht an die Leitstelle; leer: keins |
 | `beobachtung` | `aktiv` | ja | der Leitstelle melden, was an ihr vorbei auf Modelle dieses Rechners zugreift und wie belastet Läufer und Rechner sind |
@@ -253,7 +253,10 @@ und Antwort gehen unverändert hindurch, auch Audio und Bilder. Bricht die Leits
 ist gegangen oder er wurde gestoppt), schließt die Durchleitung auch ihre Verbindung zum Dienst, selbst wenn er noch
 rechnet und noch nichts geantwortet hat; ein Dienst, der darauf achtet (etwa das Bildwerk), hört dann sofort auf. Die Leitstelle startet einen Dienst dabei bei Bedarf,
 plant seinen Speicher ein und hält ihn bei Speichernot wieder an, wenn seine Dienstdatei das erlaubt. Den
-Modell-Läufer spricht die Leitstelle direkt an; durch die Durchleitung gehen nur die Dienste des Maschinenraums.
+Modell-Läufer erreicht die Leitstelle ebenfalls nur hier, unter dem reservierten Namen `_laeufer` (Ziel aus
+`nachbar.modell_laeufer`; ein Weg je Rechner, HELF-166); er lauscht dann nur auf diesem Rechner. Mit dem Zertifikat der
+Hausstelle im Ordner `zertifikate` spricht die Durchleitung TLS und meldet das der Leitstelle (`durchleitung_tls`);
+ausgestellt wird es am Mac mit der Hausstelle mit `tools/zertifikat.sh [benutzer@adresse]`.
 
 ## Am Leitstand vorbei
 

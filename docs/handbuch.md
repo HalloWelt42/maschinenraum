@@ -11,7 +11,7 @@ schluessel_orte:
   - "Mac: `~/Maschinenraum/schluessel`, Modus 0600: Schlüssel des Knotens bei der Leitstelle, zugleich Zugang der Durchleitung"
   - "Leitstelle: das Gegenstück unter Knoten (im Tresor der Leitstelle)"
 einrichten: einrichten.sh
-stand: b8d0798
+stand: b50be71
 ---
 
 # Maschinenraum
@@ -21,7 +21,8 @@ stand: b8d0798
 Der Maschinenraum ist die zweite Stelle neben dem Modell-Läufer auf dem Mac: er verwaltet alle übrigen KI-Modelle und
 Dienste, die nicht im Modell-Läufer laufen, etwa die Sprachdienste des [[Klangwerk]], Bilderzeugung und Musik, und
 meldet sie der [[Leitstelle]] als alternative Anbindung. Die Leitstelle ist die zentrale Steuerung und Überwachung;
-den Modell-Läufer spricht sie direkt an. Jeder Dienst steht als eigene Datei in `~/Maschinenraum/dienste/` (Befehl, Port, Fähigkeiten,
+auch den Modell-Läufer erreicht sie nur über die Durchleitung des Maschinenraums (ein Weg je Rechner, HELF-166), der
+Läufer lauscht dann nur am Mac. Jeder Dienst steht als eigene Datei in `~/Maschinenraum/dienste/` (Befehl, Port, Fähigkeiten,
 Speicherbedarf); der Maschinenraum startet ihn in eigener Prozessgruppe, prüft, ob er antwortet, misst Speicher und
 Last, startet ihn nach einem Absturz begrenzt neu und hält ihn an. Als Knoten-Agent der Leitstelle meldet er den
 gemessenen Speicher des Macs und nimmt ihre Befehle an (Dienst starten, anhalten), und über die Durchleitung reicht er
@@ -36,7 +37,7 @@ Ohne Maschinenraum hört und spricht im Verbund niemand: die Leitstelle kann die
 noch erreichen.
 
 Er läuft als launchd-Dienst `maschinenraum` mit Oberfläche im Browser (nur dieser Rechner, Vorgabe Port {{port:ziel/lokal}}) und
-Durchleitung für die Leitstelle (im Netz, Vorgabe Port 8541); dazu ein Symbol in der Menüleiste, das die KI-Dienste
+Durchleitung für die Leitstelle (im Netz, Vorgabe Port 8541, mit TLS aus der Hausstelle: im Heimnetz nur TLS); dazu ein Symbol in der Menüleiste, das die KI-Dienste
 mit Zustand und Speicher zeigt und die Oberflächen von Maschinenraum, [[Stellwerk]] und [[Leitstelle]] öffnet (es
 schaltet nichts). In Kopfzeile und Tab-Titel heißt er "Maschinenraum · KI-Dienste". Die Ports stehen als Vorgabe in
 `maschinenraum/konfig.py` und lassen sich in `einstellungen.toml` ändern.
@@ -72,6 +73,15 @@ aktualisiert und wartet, bis keine Anfrage der Leitstelle mehr durchgereicht wir
 
 Probe: `curl -s http://127.0.0.1:{{port:ziel/lokal}}/api/version` meldet `{"version":"{{fassung}}"}`, und
 `launchctl print gui/$(id -u)/maschinenraum | grep state` zeigt `running`.
+
+Zertifikat der Durchleitung: am Mac mit der Hausstelle `tools/zertifikat.sh` (für diesen Mac) oder
+`tools/zertifikat.sh <benutzer>@<adresse>` (für einen anderen Mac, per ssh). Es legt `durchleitung.pem` und
+`durchleitung-schluessel.pem` nach `~/Maschinenraum/zertifikate`; danach `./einrichten.sh` erneut, und die Durchleitung
+spricht TLS. Im Modell-Läufer (LM Studio) das Bereitstellen im lokalen Netz abschalten: er lauscht nur am Mac, die
+Leitstelle erreicht ihn über die Durchleitung unter `_laeufer`.
+
+Probe: `tools/zertifikat.sh --pruefen` endet mit 0, und `curl -s --cacert "$(mkcert -CAROOT)/rootCA.pem"
+https://<adresse>:8541/` antwortet mit 401 (TLS steht, ohne Schlüssel kein Zutritt).
 
 ### 2. Mit der Leitstelle verbinden
 

@@ -125,3 +125,48 @@ def test_abbruch_der_leitstelle_erreicht_den_dienst():
         assert lz.durchleitungen == 0, "die abgebrochene Durchleitung ist wieder abgezählt"
     finally:
         tor.should_exit = dienst.should_exit = True
+
+
+# ── Modell-Läufer über die Durchleitung (HELF-166: ein Weg je Rechner) ────────
+
+def _laeufer() -> FastAPI:
+    app = FastAPI()
+
+    @app.get("/api/v1/models")
+    async def modelle(request: Request):
+        return {"models": [{"key": "probe"}], "authorization": request.headers.get("authorization")}
+
+    return app
+
+
+def test_laeufer_ueber_die_durchleitung(tmp_path: Path):
+    port = freier_port()
+    o = ordner_mit_dienst(tmp_path, freier_port())
+    o.schluessel_speichern("ls_probe")
+    e = o.einstellungen()
+    e.nachbar.modell_laeufer = f"http://127.0.0.1:{port}"
+    o.einstellungen_speichern(e)
+    s = _server(_laeufer(), port)
+    try:
+        app = erstellen(o)
+        with TestClient(durchleitung.erstellen(app.state.laufzeit)) as c:
+            assert c.get("/_laeufer/api/v1/models").status_code == 401          # nur mit dem Schlüssel
+            r = c.get("/_laeufer/api/v1/models", headers=SCHLUESSEL)
+            assert r.status_code == 200 and r.json()["models"] == [{"key": "probe"}]
+            assert r.json()["authorization"] is None, "den Schlüssel des Maschinenraums sieht der Läufer nie"
+            e.nachbar.modell_laeufer = ""                                       # leer: keiner
+            o.einstellungen_speichern(e)
+            r = c.get("/_laeufer/api/v1/models", headers=SCHLUESSEL)
+            assert r.status_code == 404 and r.json()["grund"] == "unbekannt"
+    finally:
+        s.should_exit = True
+
+
+def test_tls_nur_mit_zertifikat_und_schluessel(tmp_path: Path):
+    o = ordner_mit_dienst(tmp_path, freier_port())
+    assert o.durchleitung_tls() is None
+    o.zertifikate.mkdir()
+    (o.zertifikate / "durchleitung.pem").write_text("zertifikat")
+    assert o.durchleitung_tls() is None, "ohne Schlüssel kein TLS"
+    (o.zertifikate / "durchleitung-schluessel.pem").write_text("schluessel")
+    assert o.durchleitung_tls() == (o.zertifikate / "durchleitung.pem", o.zertifikate / "durchleitung-schluessel.pem")
